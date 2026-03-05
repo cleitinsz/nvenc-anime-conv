@@ -303,16 +303,16 @@ function buildArgs(item) {
   return [
     "-y", "-hwaccel", "cuda",
     "-i", item.fullPath,
-    "-map", "0:v", "-map", "0:a:0", "-map", "0:s?",
+    "-map", "0:V", "-map", "0:a:0", "-map", "0:s?",  // 0:V exclui thumbnails/capas MJPEG
     "-vf", "hqdn3d=1.2:1.2:5:5,gradfun",
     "-c:v", "hevc_nvenc",
     "-gpu", String(config.gpu),
     "-preset", config.preset,
-    "-tune", "hq", "-rc", "vbr",
+    "-rc", "vbr",  // -tune hq removido: NV_ENC_ERR_UNSUPPORTED_PARAM em main10
     "-cq", String(item.height >= 1000 ? config.cqHD : config.cqSD), "-b:v", "0",
     "-spatial-aq", "1", "-aq-strength", "8",
     "-profile:v", "main10", "-pix_fmt", "p010le",
-    "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1",
+    "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
     "-progress", item.progressFile,
     item.saida,
   ];
@@ -369,9 +369,20 @@ function finishSlot(slotId, code) {
       }
     }
   } else {
-    const lastError = slot.getStderr().split("\n")
-      .filter(l => /error|invalid|failed|cannot/i.test(l)).pop()?.trim() || "sem mensagem";
-    log("ERRO", `[Slot ${slotId}] FALHA: ${item.name} | ExitCode ${code} | ${lastError}`);
+    // Extrai até 5 linhas de erro do stderr para diagnóstico
+    const stderrLines = slot.getStderr().split("\n").map(l => l.trim()).filter(Boolean);
+    const errorLines  = stderrLines
+      .filter(l => /error|invalid|failed|cannot|unsupported|unknown/i.test(l))
+      .slice(-5);
+    const lastError   = errorLines.pop() || stderrLines.slice(-2).join(" | ") || "sem mensagem";
+
+    log("ERRO", `[Slot ${slotId}] FALHA: ${item.name} | ExitCode ${code}`);
+    log("ERRO", `  CAUSA: ${lastError}`);
+
+    // Loga linhas adicionais de contexto se houver mais de uma linha de erro
+    for (const l of errorLines) {
+      log("DEBUG", `  > ${l}`);
+    }
     errorCount++;
     mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "error" });
   }

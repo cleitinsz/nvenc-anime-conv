@@ -2,6 +2,13 @@
 
 Interface gráfica Electron para conversão de anime em H.265 com GPU NVIDIA.
 
+### Tela Inicial
+![Preview do projeto](assets/home.png)
+### Tela de processamento
+![Preview do projeto](assets/processing.png)
+### Tela Final
+![Preview do projeto](assets/final.png)
+
 ## Requisitos
 
 - Windows 10/11

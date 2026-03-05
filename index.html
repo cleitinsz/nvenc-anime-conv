@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>NVENC Anime Converter</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0a0e14;--panel:#0f1520;--panel2:#0d1220;
+      --border:#1a2535;--border2:#243045;
+      --accent:#00e5ff;--accent2:#ff4081;--green:#00e676;--yellow:#ffd740;
+      --text:#c8d8f0;--muted:#4a6080;--muted2:#2a3a55;
+      --mono:'JetBrains Mono',monospace;
+    }
+    body{background:var(--bg);color:var(--text);font-family:var(--mono);height:100vh;overflow:hidden;user-select:none}
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+    @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+    @keyframes slide-in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes glow-bar{0%,100%{opacity:1}50%{opacity:.65}}
+    .log-entry{animation:slide-in .12s ease}
+    .btn{cursor:pointer;border:none;outline:none;font-family:var(--mono);transition:all .15s ease}
+    .btn:active{transform:scale(.97)}
+    .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+    .file-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;margin-bottom:2px;border:1px solid transparent;transition:background .2s,border-color .2s}
+    .file-row:hover{background:#ffffff07!important}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+// ── Componentes base ─────────────────────────────────────────
+
+function ProgressBar({ pct=0, color="var(--accent)", height=4, glow=false }) {
+  return (
+    <div style={{background:"#05090f",borderRadius:99,height,overflow:"hidden",width:"100%"}}>
+      <div style={{
+        width:`${Math.min(100,pct)}%`,height:"100%",borderRadius:99,
+        background:`linear-gradient(90deg,${color}66,${color})`,
+        transition:"width .5s ease",
+        boxShadow:glow?`0 0 10px ${color}55`:"none",
+        animation:glow&&pct<100?"glow-bar 2s infinite":"none",
+      }}/>
+    </div>
+  );
+}
+
+const STATUS_META = {
+  queue:     {color:"var(--muted)", label:"FILA"},
+  converting:{color:"var(--accent)",label:"ENCODE"},
+  done:      {color:"var(--green)", label:"PRONTO"},
+  error:     {color:"var(--accent2)",label:"ERRO"},
+  done_skip: {color:"var(--muted)", label:"JÁ OK"},
+  hevc_skip: {color:"var(--muted)", label:"HEVC"},
+};
+function Badge({status}) {
+  const m = STATUS_META[status]||STATUS_META.queue;
+  return <span style={{fontSize:8,fontWeight:800,letterSpacing:1.5,color:m.color,
+    border:`1px solid ${m.color}44`,borderRadius:3,padding:"2px 7px",
+    minWidth:52,textAlign:"center",flexShrink:0}}>{m.label}</span>;
+}
+
+function StatCard({label,value,sub,color="var(--text)"}) {
+  return (
+    <div style={{background:"var(--panel)",border:"1px solid var(--border)",
+      borderRadius:8,padding:"10px 14px",flex:1,minWidth:80}}>
+      <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:4}}>{label}</div>
+      <div style={{fontSize:18,fontWeight:800,color,lineHeight:1}}>{value}</div>
+      {sub&&<div style={{fontSize:9,color:"var(--muted)",marginTop:3}}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Settings panel ───────────────────────────────────────────
+
+function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart,onStop,onRetry,running,scanning,folder,outputFolder,totalQueue,errorCount}) {
+  function set(k,v){onChange({...cfg,[k]:v});}
+  const disabled = running||scanning;
+
+  return (
+    <div style={{width:210,borderRight:"1px solid var(--border)",background:"var(--panel2)",
+      display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+      <div style={{padding:"14px 16px 10px",borderBottom:"1px solid var(--border)"}}>
+        <div style={{fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:3}}>NVENC ANIME</div>
+        <div style={{fontSize:9,color:"var(--muted)",letterSpacing:1.5}}>H.265 CONVERTER v7</div>
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:14,display:"flex",flexDirection:"column",gap:16}}>
+
+        {/* Pasta */}
+        <div>
+          <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:6}}>PASTA</div>
+          <div style={{background:"#05090f",border:"1px solid var(--border)",borderRadius:6,
+            padding:"6px 8px",fontSize:9,color:folder?"var(--text)":"var(--muted)",
+            wordBreak:"break-all",lineHeight:1.6,minHeight:44}}>
+            {folder||"Nenhuma pasta selecionada"}
+          </div>
+          <button className="btn" onClick={onSelectFolder} disabled={disabled} style={{
+            width:"100%",marginTop:5,background:"var(--border)",border:"1px solid var(--border2)",
+            color:"var(--muted)",borderRadius:6,padding:"6px 0",fontSize:10,fontWeight:700,letterSpacing:1}}>
+            📁 TROCAR PASTA
+          </button>
+        </div>
+
+        {/* Pasta de saída */}
+        <div>
+          <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:6}}>PASTA DE SAÍDA</div>
+          {/* Três modos */}
+          {[
+            ["same",    "Mesma pasta",        "Ao lado do original"],
+            ["encoded", "Subpasta /encoded",  "Criada automaticamente"],
+            ["custom",  "Pasta personalizada","Você escolhe onde"],
+          ].map(([mode,label,desc])=>(
+            <button key={mode} className="btn" onClick={()=>set("outputMode",mode)} disabled={disabled} style={{
+              width:"100%",textAlign:"left",padding:"5px 8px",borderRadius:5,marginBottom:2,
+              background:cfg.outputMode===mode?"#00e5ff0f":"transparent",border:"none",
+              color:cfg.outputMode===mode?"var(--accent)":"var(--muted)",
+              borderLeft:`2px solid ${cfg.outputMode===mode?"var(--accent)":"transparent"}`,
+              display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700}}>
+              <span>{label}</span>
+              <span style={{fontWeight:400,fontSize:9}}>{desc}</span>
+            </button>
+          ))}
+          {/* Seletor de pasta customizada — aparece só no modo custom */}
+          {cfg.outputMode==="custom" && (
+            <div style={{marginTop:6}}>
+              <div style={{background:"#05090f",border:"1px solid var(--border)",borderRadius:6,
+                padding:"5px 8px",fontSize:9,lineHeight:1.5,minHeight:34,marginBottom:4,
+                color:outputFolder?"var(--text)":"var(--accent2)",wordBreak:"break-all"}}>
+                {outputFolder||"⚠ Nenhuma pasta selecionada"}
+              </div>
+              <button className="btn" onClick={onSelectOutputFolder} disabled={disabled} style={{
+                width:"100%",background:"var(--border)",border:"1px solid var(--border2)",
+                color:"var(--muted)",borderRadius:6,padding:"5px 0",fontSize:10,fontWeight:700,letterSpacing:1}}>
+                📂 ESCOLHER PASTA
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Jobs */}
+        <div>
+          <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:6}}>JOBS PARALELOS</div>
+          <div style={{display:"flex",gap:5,marginBottom:4}}>
+            {[1,2,3].map(n=>(
+              <button key={n} className="btn" onClick={()=>set("jobs",n)} disabled={running} style={{
+                flex:1,padding:"8px 0",borderRadius:6,fontSize:14,fontWeight:800,
+                background:cfg.jobs===n?"#00e5ff18":"#05090f",
+                border:`1px solid ${cfg.jobs===n?"var(--accent)":"var(--border)"}`,
+                color:cfg.jobs===n?"var(--accent)":"var(--muted)"}}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <div style={{fontSize:9,color:"var(--muted)",lineHeight:1.5}}>⚠ Máx. consumer NVIDIA: 3</div>
+        </div>
+
+        {/* Preset */}
+        <div>
+          <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:6}}>PRESET NVENC</div>
+          {[["p4","Rápido"],["p5","Médio"],["p6","Recomendado"],["p7","Lento"]].map(([p,desc])=>(
+            <button key={p} className="btn" onClick={()=>set("preset",p)} disabled={running} style={{
+              width:"100%",textAlign:"left",padding:"5px 8px",borderRadius:5,marginBottom:2,
+              background:cfg.preset===p?"#00e5ff0f":"transparent",border:"none",
+              color:cfg.preset===p?"var(--accent)":"var(--muted)",
+              borderLeft:`2px solid ${cfg.preset===p?"var(--accent)":"transparent"}`,
+              display:"flex",justifyContent:"space-between",fontSize:11,fontWeight:700}}>
+              <span>{p}</span>
+              <span style={{fontWeight:400,fontSize:9}}>{desc}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* GPU */}
+        <div>
+          <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:6}}>GPU</div>
+          {[0,1].map(g=>(
+            <button key={g} className="btn" onClick={()=>set("gpu",g)} disabled={running} style={{
+              width:"100%",textAlign:"left",padding:"5px 8px",borderRadius:5,marginBottom:2,
+              background:cfg.gpu===g?"#00e5ff0f":"transparent",border:"none",
+              color:cfg.gpu===g?"var(--accent)":"var(--muted)",
+              borderLeft:`2px solid ${cfg.gpu===g?"var(--accent)":"transparent"}`,
+              fontSize:11,fontWeight:700}}>
+              GPU {g}
+            </button>
+          ))}
+        </div>
+
+        {/* CQ */}
+        <div>
+          <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:6}}>CQ (QUALIDADE)</div>
+          {[["cqHD","1080p+"],["cqSD","720p-"]].map(([key,lbl])=>(
+            <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:10,color:"var(--muted)"}}>{lbl}</span>
+              <div style={{display:"flex",alignItems:"center",gap:5}}>
+                <button className="btn" onClick={()=>set(key,Math.max(18,cfg[key]-1))} disabled={disabled}
+                  style={{background:"var(--border)",border:"none",color:"var(--text)",
+                    borderRadius:4,width:20,height:20,fontSize:13}}>−</button>
+                <span style={{fontSize:13,fontWeight:800,color:"var(--accent)",minWidth:22,textAlign:"center"}}>{cfg[key]}</span>
+                <button className="btn" onClick={()=>set(key,Math.min(35,cfg[key]+1))} disabled={disabled}
+                  style={{background:"var(--border)",border:"none",color:"var(--text)",
+                    borderRadius:4,width:20,height:20,fontSize:13}}>+</button>
+              </div>
+            </div>
+          ))}
+          <div style={{fontSize:9,color:"var(--muted)"}}>Menor = melhor qualidade</div>
+        </div>
+
+        {/* Deletar original */}
+        <div>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:disabled?"default":"pointer"}}>
+            <div onClick={()=>!disabled&&set("deletarOriginal",!cfg.deletarOriginal)} style={{
+              width:30,height:16,borderRadius:99,
+              background:cfg.deletarOriginal?"var(--accent2)":"var(--muted2)",
+              position:"relative",transition:"all .2s",cursor:disabled?"default":"pointer",
+              opacity:disabled?.6:1}}>
+              <div style={{position:"absolute",top:2,left:cfg.deletarOriginal?15:2,
+                width:12,height:12,borderRadius:"50%",background:"white",transition:"left .15s"}}/>
+            </div>
+            <span style={{fontSize:10,color:"var(--muted)"}}>Deletar original</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Botões de ação */}
+      <div style={{padding:12,borderTop:"1px solid var(--border)",display:"flex",flexDirection:"column",gap:6}}>
+        {/* Retry — aparece só quando há erros e não está rodando */}
+        {errorCount > 0 && !running && (
+          <button className="btn" onClick={onRetry} style={{
+            width:"100%",padding:"8px 0",
+            background:"#ff408118",border:"1px solid var(--accent2)",
+            color:"var(--accent2)",borderRadius:7,fontSize:11,fontWeight:800,letterSpacing:1.5}}>
+            ↺ RETENTAR ERROS ({errorCount})
+          </button>
+        )}
+
+        {!running ? (
+          <button className="btn" onClick={onStart}
+            disabled={!folder||scanning||totalQueue===0} style={{
+            width:"100%",padding:"10px 0",
+            background:"#00e5ff18",border:"1px solid var(--accent)",
+            color:"var(--accent)",borderRadius:7,fontSize:12,fontWeight:800,letterSpacing:2}}>
+            ▶ INICIAR
+          </button>
+        ) : (
+          <button className="btn" onClick={onStop} style={{
+            width:"100%",padding:"10px 0",
+            background:"#ff408118",border:"1px solid var(--accent2)",
+            color:"var(--accent2)",borderRadius:7,fontSize:12,fontWeight:800,letterSpacing:2}}>
+            ⏹ PARAR
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Slots ativos com fps/speed/bitrate ──────────────────────
+
+function ActiveSlots({slots, totalConversoes}) {
+  const active = Object.values(slots).filter(s=>s.name);
+  if (active.length===0) return null;
+  return (
+    <div style={{borderBottom:"1px solid var(--border)",padding:"10px 14px",
+      background:"#0c1422",display:"flex",gap:10}}>
+      {active.map(slot=>(
+        <div key={slot.slotId} style={{flex:1,background:"var(--panel)",
+          border:"1px solid #00e5ff1e",borderRadius:8,padding:"10px 12px",
+          boxShadow:"0 0 20px #00e5ff05"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+            <div style={{fontSize:9,color:"var(--accent)",letterSpacing:2,fontWeight:800}}>
+              ⚡ SLOT {slot.slotId}
+              <span style={{color:"var(--muted)",fontWeight:400,marginLeft:5}}>[{slot.id}/{totalConversoes}]</span>
+            </div>
+            <div style={{fontSize:9,color:"var(--muted)"}}>ETA {slot.eta||"--:--"}</div>
+          </div>
+
+          <div style={{fontSize:10,color:"var(--text)",marginBottom:6,
+            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+            {slot.name}
+          </div>
+
+          <ProgressBar pct={slot.progress||0} glow height={5}/>
+
+          {/* fps / speed / bitrate  [UX] */}
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:5,gap:6}}>
+            <span style={{fontSize:9,color:"var(--muted)"}}>CQ {slot.cq}</span>
+            <div style={{display:"flex",gap:8}}>
+              {slot.fps   && <span style={{fontSize:9,color:"#7ecfff"}}>{slot.fps}</span>}
+              {slot.speed && <span style={{fontSize:9,color:"var(--yellow)",fontWeight:700}}>{slot.speed}</span>}
+              {slot.bitrate&&<span style={{fontSize:9,color:"var(--muted)"}}>{slot.bitrate}</span>}
+            </div>
+            <span style={{fontSize:10,color:"var(--accent)",fontWeight:800}}>{slot.progress||0}%</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Lista de arquivos com busca  ─────────────────────────────
+
+function FileList({files, filter, setFilter}) {
+  const [search, setSearch] = useState("");
+
+  const counts = useMemo(()=>({
+    all:       files.filter(f=>!["done_skip","hevc_skip"].includes(f.status)).length,
+    queue:     files.filter(f=>f.status==="queue").length,
+    converting:files.filter(f=>f.status==="converting").length,
+    done:      files.filter(f=>f.status==="done").length,
+    error:     files.filter(f=>f.status==="error").length,
+  }),[files]);
+
+  const filtered = useMemo(()=>{
+    let list = files.filter(f=>!["done_skip","hevc_skip"].includes(f.status));
+    if (filter!=="all") list = list.filter(f=>f.status===filter);
+    if (search.trim())  list = list.filter(f=>f.name.toLowerCase().includes(search.toLowerCase()));
+    return list;
+  },[files,filter,search]);
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Toolbar: filtros + busca */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 14px",
+        borderBottom:"1px solid var(--border)"}}>
+        <div style={{display:"flex",gap:2,flex:1}}>
+          {[["all","Todos"],["queue","Fila"],["converting","Encode"],["done","Prontos"],["error","Erros"]].map(([id,lbl])=>(
+            <button key={id} className="btn" onClick={()=>setFilter(id)} style={{
+              padding:"4px 10px",borderRadius:5,fontSize:10,fontWeight:700,
+              background:filter===id?"#00e5ff18":"transparent",
+              border:`1px solid ${filter===id?"var(--accent)":"transparent"}`,
+              color:filter===id?"var(--accent)":"var(--muted)"}}>
+              {lbl}
+              <span style={{marginLeft:4,fontSize:9,
+                color:filter===id?"var(--accent)":"var(--muted2)"}}>
+                {counts[id]}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* [UX] Busca por nome */}
+        <div style={{position:"relative"}}>
+          <span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",
+            fontSize:11,color:"var(--muted)",pointerEvents:"none"}}>🔍</span>
+          <input
+            value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Buscar arquivo..."
+            style={{background:"#05090f",border:"1px solid var(--border)",borderRadius:6,
+              padding:"5px 8px 5px 26px",color:"var(--text)",fontSize:10,
+              fontFamily:"var(--mono)",width:180,outline:"none"}}
+          />
+          {search && (
+            <button className="btn" onClick={()=>setSearch("")}
+              style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",
+                background:"none",border:"none",color:"var(--muted)",fontSize:12,padding:0}}>
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div style={{flex:1,overflowY:"auto",padding:"5px 8px"}}>
+        {filtered.length===0 && (
+          <div style={{textAlign:"center",color:"var(--muted)",fontSize:11,padding:40}}>
+            {search ? `Nenhum resultado para "${search}"` : "Nenhum arquivo"}
+          </div>
+        )}
+        {filtered.map((f,i)=>(
+          <div key={f.fullPath||i} className="file-row" style={{
+            background:f.status==="converting"?"#00e5ff07":
+                       f.status==="error"?"#ff408107":"transparent",
+            borderColor:f.status==="converting"?"#00e5ff1a":
+                        f.status==="error"?"#ff40811a":"transparent"}}>
+            <Badge status={f.status}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,
+                color:f.status==="error"?"var(--accent2)":"var(--text)",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+                marginBottom:f.status==="converting"?4:0}}>
+                {f.name}
+              </div>
+              {f.status==="converting"&&<ProgressBar pct={f.progress||0} height={3} glow/>}
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,fontSize:10}}>
+              {f.status==="done"&&f.mb2!=null ? (
+                <>
+                  <span style={{color:"var(--muted)"}}>{f.mb1} MB</span>
+                  <span style={{color:"var(--muted)"}}>→</span>
+                  <span style={{color:"var(--green)",fontWeight:700}}>{f.mb2} MB</span>
+                  <span style={{color:"var(--green)",fontWeight:700,
+                    background:"#00e67614",border:"1px solid #00e67630",
+                    borderRadius:4,padding:"1px 5px",fontSize:9}}>
+                    -{f.reducao}%
+                  </span>
+                </>
+              ) : f.status==="converting" ? (
+                <span style={{color:"var(--accent)"}}>ETA {f.eta||"--:--"}</span>
+              ) : (
+                <span style={{color:"var(--muted)"}}>
+                  {f.size?(f.size/1048576).toFixed(1)+" MB":""}
+                </span>
+              )}
+              <span style={{color:"var(--muted2)",fontSize:9}}>CQ{f.cq||"?"}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Log viewer com auto-scroll e pin ─────────────────────────
+
+function LogViewer({logs}) {
+  const ref = useRef(null);
+  const [pinned, setPinned] = useState(true);
+  const LVL = {OK:"var(--green)",ERRO:"var(--accent2)",AVISO:"var(--yellow)",DEBUG:"var(--muted)",INFO:"var(--text)"};
+
+  useEffect(()=>{
+    if (pinned && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  },[logs,pinned]);
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",
+        padding:"5px 14px",borderBottom:"1px solid var(--border)",gap:8}}>
+        <span style={{fontSize:9,color:"var(--muted)"}}>{logs.length} linhas</span>
+        <button className="btn" onClick={()=>setPinned(p=>!p)} style={{
+          background:pinned?"#00e5ff18":"transparent",
+          border:`1px solid ${pinned?"var(--accent)":"var(--border)"}`,
+          color:pinned?"var(--accent)":"var(--muted)",
+          borderRadius:5,padding:"3px 8px",fontSize:9,fontWeight:700}}>
+          {pinned?"📌 FIXADO":"FIXAR"}
+        </button>
+      </div>
+      <div ref={ref} onScroll={e=>{
+        const el=e.target;
+        const atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<20;
+        setPinned(atBottom);
+      }} style={{flex:1,overflowY:"auto",padding:"8px 14px",fontSize:11}}>
+        {logs.map((l,i)=>(
+          <div key={i} className="log-entry"
+            style={{display:"flex",gap:8,marginBottom:2,lineHeight:1.7}}>
+            <span style={{color:"var(--muted)",flexShrink:0,fontSize:10}}>{l.t}</span>
+            <span style={{color:LVL[l.lvl]||"var(--text)",fontWeight:700,
+              flexShrink:0,minWidth:38,fontSize:10,letterSpacing:.5}}>
+              [{l.lvl}]
+            </span>
+            <span style={{color:"var(--text)"}}>{l.msg}</span>
+          </div>
+        ))}
+        {logs.length===0&&(
+          <div style={{color:"var(--muted)",fontSize:11,marginTop:16}}>
+            Aguardando início da conversão...
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Tela de scan (com barra de progresso do scan)  ───────────
+
+function ScanScreen({scanProg}) {
+  const pct = scanProg && scanProg.total > 0
+    ? Math.round(scanProg.scanned / scanProg.total * 100) : 0;
+  const phase = scanProg?.phase === "probe" ? "Lendo metadados (paralelo)..." : "Listando arquivos...";
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",gap:16,color:"var(--muted)"}}>
+      <div style={{fontSize:32,opacity:.3}}>🔍</div>
+      <div style={{fontSize:13,fontWeight:700,color:"var(--muted)"}}>{phase}</div>
+      {scanProg && (
+        <>
+          <div style={{width:280}}>
+            <ProgressBar pct={pct} glow/>
+          </div>
+          <div style={{fontSize:11,color:"var(--muted)"}}>
+            {scanProg.scanned} / {scanProg.total} arquivos · {pct}%
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function EmptyState({onSelect}) {
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",gap:14,color:"var(--muted)"}}>
+      <div style={{fontSize:44,opacity:.25}}>🎌</div>
+      <div style={{fontSize:13,fontWeight:700}}>Selecione uma pasta para começar</div>
+      <button className="btn" onClick={onSelect} style={{
+        background:"#00e5ff18",border:"1px solid var(--accent)",color:"var(--accent)",
+        borderRadius:8,padding:"9px 22px",fontSize:12,fontWeight:700,letterSpacing:1.5}}>
+        📁 SELECIONAR PASTA
+      </button>
+    </div>
+  );
+}
+
+// ── App principal ────────────────────────────────────────────
+
+function App() {
+  const [cfg,       setCfg]      = useState({gpu:0,preset:"p6",jobs:2,cqHD:28,cqSD:26,deletarOriginal:false});
+  const [folder,    setFolder]   = useState(null);
+  const [outputFolder, setOutputFolder] = useState(null);
+  const [files,     setFiles]    = useState([]);
+  const [slots,     setSlots]    = useState({});
+  const [logs,      setLogs]     = useState([]);
+  const [stats,     setStats]    = useState({done:0,errors:0,active:0,queue:0,ganhoGB:"0.00",globalEta:""});
+  const [running,   setRunning]  = useState(false);
+  const [scanning,  setScanning] = useState(false);
+  const [scanProg,  setScanProg] = useState(null);
+  const [tab,       setTab]      = useState("files");
+  const [filter,    setFilter]   = useState("all");
+
+  const totalConversoes = files.filter(f=>!["done_skip","hevc_skip"].includes(f.status)).length;
+  const totalQueue      = files.filter(f=>f.status==="queue").length;
+  const errorFiles      = files.filter(f=>f.status==="error");
+
+  const addLog     = useCallback((e)=>setLogs(p=>[...p.slice(-500),e]),[]);
+  const updateFile = useCallback((fullPath,update)=>{
+    setFiles(p=>p.map(f=>f.fullPath===fullPath?{...f,...update}:f));
+  },[]);
+
+  // IPC listeners
+  useEffect(()=>{
+    // [FEAT] Recebe config persistida do main ao iniciar
+    window.api.on("config-loaded", (c)=>{
+      setCfg(prev=>({...prev,...c}));
+      if (c.lastFolder)   setFolder(c.lastFolder);
+      if (c.outputFolder) setOutputFolder(c.outputFolder);
+      if (c.outputMode)   {} // handled via cfg
+    });
+    window.api.on("log",            addLog);
+    window.api.on("stats",          setStats);
+    window.api.on("scan-progress",  setScanProg);
+    window.api.on("slot-update",   (d)=>setSlots(p=>({...p,[d.slotId]:d})));
+    window.api.on("slot-clear",    ({slotId})=>setSlots(p=>{const n={...p};delete n[slotId];return n;}));
+    window.api.on("file-status",   (d)=>updateFile(d.fullPath,d));
+    window.api.on("reset-converting",()=>{
+      setFiles(p=>p.map(f=>f.status==="converting"?{...f,status:"queue",progress:0}:f));
+      setSlots({});
+    });
+    window.api.on("conversion-done",(d)=>{
+      setRunning(false);
+      addLog({t:new Date().toLocaleTimeString("pt-BR",{hour12:false}),lvl:"OK",
+        msg:`Concluído — Convertidos: ${d.convertidos} | Erros: ${d.erros} | Ganho: ${d.ganhoGB} GB`});
+    });
+    return ()=>{
+      ["config-loaded","log","stats","scan-progress","slot-update","slot-clear",
+       "file-status","reset-converting","conversion-done"].forEach(c=>window.api.off(c));
+    };
+  },[addLog,updateFile]);
+
+  // Sincroniza config
+  useEffect(()=>{ window.api.setConfig(cfg); },[cfg]);
+
+  async function handleSelectFolder() {
+    const p = await window.api.selectFolder();
+    if (!p) return;
+    setFolder(p); setFiles([]); setLogs([]);
+    setStats({done:0,errors:0,active:0,queue:0,ganhoGB:"0.00",globalEta:""});
+    setSlots({}); setScanProg(null); setScanning(true);
+    addLog({t:now(),lvl:"INFO",msg:`Pasta: ${p}`});
+    addLog({t:now(),lvl:"INFO",msg:"Analisando arquivos (scan paralelo)..."});
+    const result = await window.api.scanFolder(p);
+    setFiles(result); setScanning(false); setScanProg(null);
+    const q    = result.filter(f=>f.status==="queue").length;
+    const skip = result.filter(f=>["done_skip","hevc_skip"].includes(f.status)).length;
+    addLog({t:now(),lvl:"INFO",msg:`${result.length} arquivos — ${q} na fila | ${skip} ignorados`});
+  }
+
+  function now(){ return new Date().toLocaleTimeString("pt-BR",{hour12:false}); }
+
+  async function handleSelectOutputFolder() {
+    const p = await window.api.selectOutputFolder();
+    if (!p) return;
+    setOutputFolder(p);
+  }
+
+  function handleStart(){ setRunning(true); window.api.startConversion(files); }
+  function handleStop() { window.api.stopConversion(); setRunning(false); }
+  function handleRetry(){
+    if (errorFiles.length===0) return;
+    window.api.retryErrors(errorFiles);
+    setRunning(true);
+  }
+
+  const donePct = totalConversoes>0 ? Math.round(stats.done/totalConversoes*100) : 0;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden"}}>
+
+      {/* Header */}
+      <div style={{height:40,borderBottom:"1px solid var(--border)",
+        display:"flex",alignItems:"center",padding:"0 14px",gap:12,
+        background:"var(--panel2)",WebkitAppRegion:"drag"}}>
+        <div style={{width:72}}/>
+
+        {folder && (
+          <div style={{display:"flex",alignItems:"center",gap:10,flex:1}}>
+            <div style={{flex:1,maxWidth:280}}>
+              <ProgressBar pct={donePct} glow={running}/>
+            </div>
+            <span style={{fontSize:10,color:"var(--accent)",fontWeight:800,minWidth:30}}>{donePct}%</span>
+            <span style={{fontSize:10,color:"var(--muted)"}}>{stats.done}/{totalConversoes}</span>
+            {/* [UX] ETA global */}
+            {stats.globalEta && running && (
+              <span style={{fontSize:10,color:"var(--yellow)",fontWeight:700,
+                background:"#ffd74014",border:"1px solid #ffd74033",
+                borderRadius:4,padding:"2px 8px"}}>
+                ⏱ {stats.globalEta}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div style={{flex:1}}/>
+
+        <div style={{display:"flex",alignItems:"center",gap:6,WebkitAppRegion:"no-drag"}}>
+          <div style={{width:7,height:7,borderRadius:"50%",
+            background:running?"var(--green)":scanning?"var(--yellow)":"var(--muted)",
+            boxShadow:running?"0 0 8px var(--green)":"none",
+            animation:(running||scanning)?"pulse-dot 2s infinite":"none"}}/>
+          <span style={{fontSize:9,letterSpacing:1.5,color:"var(--muted)"}}>
+            {running?"CONVERTENDO":scanning?"ANALISANDO":"PRONTO"}
+          </span>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{flex:1,display:"flex",overflow:"hidden"}}>
+        <SettingsPanel
+          cfg={cfg} onChange={setCfg}
+          onSelectFolder={handleSelectFolder}
+          onStart={handleStart} onStop={handleStop} onRetry={handleRetry}
+          onSelectOutputFolder={handleSelectOutputFolder}
+          running={running} scanning={scanning}
+          folder={folder} outputFolder={outputFolder} totalQueue={totalQueue} errorCount={errorFiles.length}
+        />
+
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          {!folder && !scanning ? (
+            <EmptyState onSelect={handleSelectFolder}/>
+          ) : scanning ? (
+            <ScanScreen scanProg={scanProg}/>
+          ) : (
+            <>
+              {/* Stats */}
+              <div style={{borderBottom:"1px solid var(--border)",padding:"9px 14px",display:"flex",gap:7}}>
+                <StatCard label="TOTAL"        value={totalConversoes}       sub="arquivos"/>
+                <StatCard label="CONVERTIDOS"  value={stats.done}            sub={`de ${totalConversoes}`} color="var(--green)"/>
+                <StatCard label="EM ENCODE"    value={stats.active}          sub="slots" color="var(--accent)"/>
+                <StatCard label="ERROS"        value={stats.errors}          sub="arquivos" color={stats.errors>0?"var(--accent2)":"var(--muted)"}/>
+                <StatCard label="ESPAÇO SALVO" value={`${stats.ganhoGB} GB`} sub="liberados" color="var(--yellow)"/>
+              </div>
+
+              <ActiveSlots slots={slots} totalConversoes={totalConversoes}/>
+
+              {/* Tabs */}
+              <div style={{borderBottom:"1px solid var(--border)",display:"flex",padding:"0 14px"}}>
+                {[["files","📋 Arquivos"],["log","📄 Log"]].map(([id,lbl])=>(
+                  <button key={id} className="btn" onClick={()=>setTab(id)} style={{
+                    padding:"8px 13px",fontSize:11,background:"transparent",border:"none",
+                    fontWeight:tab===id?700:400,
+                    color:tab===id?"var(--accent)":"var(--muted)",
+                    borderBottom:`2px solid ${tab===id?"var(--accent)":"transparent"}`,
+                    transition:"all .15s"}}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {tab==="files"
+                ? <FileList files={files} filter={filter} setFilter={setFilter}/>
+                : <LogViewer logs={logs}/>}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

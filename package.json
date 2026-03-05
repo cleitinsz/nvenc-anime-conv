@@ -1,0 +1,34 @@
+{
+  "name": "nvenc-anime-gui",
+  "version": "6.0.0",
+  "description": "Conversor Anime NVENC H.265 com interface grafica",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+   "build": {
+    "appId": "com.nvenc.anime",
+    "productName": "NVENC Anime Converter",
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}

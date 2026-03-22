@@ -30,7 +30,11 @@ function loadConfig() {
     sufixo: "_hevc", cqHD: 28, cqSD: 26,
     deletarOriginal: false, lastFolder: null,
     outputMode: "encoded",  // "same" | "encoded" | "custom"
-    outputFolder: null,       // usado só quando outputMode === "custom"
+    outputFolder: null,      // usado só quando outputMode === "custom"
+    profile: "anime",        // "anime" | "liveaction"
+    encoder: "nvenc",        // "nvenc" | "cpu"
+    cpuPreset: "medium",     // preset do libx265: faster | fast | medium | slow | slower
+    outputRes: "original",   // "original" | "1080p" | "720p"
   };
   try {
     return { ...defaults, ...JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) };
@@ -247,7 +251,10 @@ ipcMain.handle("scan-folder", async (_, folderPath) => {
 
   const result = [...preResult];
   for (const { f, saida, meta } of probeResults) {
-    if (meta.codec === "hevc") {
+    // Pula HEVC apenas se não há downscale ativo.
+    // Com downscale, recomprimir HEVC faz sentido (4K→1080p mesmo já sendo HEVC).
+    const isDownscale = config.outputRes !== "original";
+    if (meta.codec === "hevc" && !isDownscale) {
       result.push({ ...f, status: "hevc_skip", saida });
     } else {
       const cq = meta.height >= 1000 ? config.cqHD : config.cqSD;
@@ -299,30 +306,118 @@ function killAllJobs() {
   if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
 }
 
-function buildArgs(item) {
-  return [
-    "-y", "-hwaccel", "cuda",
-    "-i", item.fullPath,
-    "-map", "0:V", "-map", "0:a:0", "-map", "0:s?",  // 0:V exclui thumbnails/capas MJPEG
-    "-vf", "hqdn3d=1.2:1.2:5:5,gradfun",
+// ── Perfis de encode ─────────────────────────────────────────
+//
+//  anime      → hqdn3d (denoise leve) + gradfun (debanding)
+//               Ideal para conteúdo de animação: cores planas, bordas limpas.
+//
+//  liveaction → sem filtros de vídeo
+//               Preserva grain cinematográfico, textura de pele e detalhe 4K.
+//               AQ-strength maior compensa a ausência de denoise.
+
+const PROFILE_ENCODE = {
+  anime: {
+    vf:        "hqdn3d=1.2:1.2:5:5,gradfun",
+    aqStrength: "8",
+    // x265: aq-mode=3 (HEVC adaptive quant) + deblock suave para manter bordas
+    x265params: "aq-mode=3:aq-strength=0.8:deblock=-1,-1",
+  },
+  liveaction: {
+    vf:        null,   // preserva grain e textura
+    aqStrength: "10",
+    // x265: aq-mode=2 (variance-based), sem deblock personalizado
+    x265params: "aq-mode=2:aq-strength=1.0",
+  },
+};
+
+// ── Resolução de saída → filtro de escala ────────────────────
+//  Usa scale=-2:H para preservar aspect ratio e garantir largura par.
+//  Lanczos é o melhor algoritmo de downscale para vídeo.
+const SCALE_FILTER = { "1080p": "scale=-2:1080:flags=lanczos", "720p": "scale=-2:720:flags=lanczos" };
+
+function buildVF(profVf) {
+  const scale = SCALE_FILTER[config.outputRes]; // undefined quando "original"
+  if (scale && profVf) return `${scale},${profVf}`;
+  if (scale)           return scale;
+  if (profVf)          return profVf;
+  return null;
+}
+
+// ── GPU (NVENC) ───────────────────────────────────────────────
+function buildArgsGPU(item) {
+  const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
+  const cq   = item.height >= 1000 ? config.cqHD : config.cqSD;
+  const vf   = buildVF(prof.vf);
+
+  // -hwaccel cuda mantém frames na GPU — incompatível com filtros CPU (scale, hqdn3d).
+  // Quando há qualquer filtro de vídeo ativo, usa decode por CPU para garantir
+  // que os filtros sejam aplicados. O encode ainda acontece na GPU via hevc_nvenc.
+  const args = ["-y"];
+  if (!vf) args.push("-hwaccel", "cuda");
+  args.push("-i", item.fullPath, "-map", "0:V", "-map", "0:a:0", "-map", "0:s?");
+
+  if (vf) args.push("-vf", vf);
+
+  args.push(
     "-c:v", "hevc_nvenc",
-    "-gpu", String(config.gpu),
+    "-gpu",    String(config.gpu),
     "-preset", config.preset,
-    "-rc", "vbr",  // -tune hq removido: NV_ENC_ERR_UNSUPPORTED_PARAM em main10
-    "-cq", String(item.height >= 1000 ? config.cqHD : config.cqSD), "-b:v", "0",
-    "-spatial-aq", "1", "-aq-strength", "8",
+    "-rc",     "vbr",
+    "-cq",     String(cq), "-b:v", "0",
+    "-spatial-aq", "1", "-aq-strength", prof.aqStrength,
     "-profile:v", "main10", "-pix_fmt", "p010le",
     "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
     "-progress", item.progressFile,
     item.saida,
+  );
+
+  return args;
+}
+
+// ── CPU (libx265) ─────────────────────────────────────────────
+//  Melhor eficiência de compressão que NVENC; mais lento.
+//  Usa CRF (mesmo campo cqHD/cqSD da config, mas escala diferente:
+//  CRF 18-24 ≈ qualidade alta; NVENC CQ 24-28 equivalente visual).
+function buildArgsCPU(item) {
+  const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
+  const crf  = item.height >= 1000 ? config.cqHD : config.cqSD;
+  const vf   = buildVF(prof.vf);
+
+  const args = [
+    "-y",
+    "-i", item.fullPath,
+    "-map", "0:V", "-map", "0:a:0", "-map", "0:s?",
   ];
+
+  if (vf) args.push("-vf", vf);
+
+  args.push(
+    "-c:v", "libx265",
+    "-preset",    config.cpuPreset,
+    "-crf",       String(crf),
+    "-x265-params", prof.x265params,
+    "-pix_fmt",   "yuv420p10le",
+    "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
+    "-progress", item.progressFile,
+    item.saida,
+  );
+
+  return args;
+}
+
+function buildArgs(item) {
+  return config.encoder === "cpu" ? buildArgsCPU(item) : buildArgsGPU(item);
 }
 
 function startSlot(slotId, item) {
   const progressFile = path.join(os.tmpdir(), `nvenc_s${slotId}_${Date.now()}.tmp`);
   item.progressFile  = progressFile;
 
-  log("INFO", `[Slot ${slotId}] Iniciando: ${item.name} | ${item.height}p CQ${item.height >= 1000 ? config.cqHD : config.cqSD}`);
+  const qual    = item.height >= 1000 ? config.cqHD : config.cqSD;
+  const encLabel = config.encoder === "cpu"
+    ? `CPU x265 CRF${qual} [${config.cpuPreset}]`
+    : `GPU NVENC CQ${qual} [${config.preset}]`;
+  log("INFO", `[Slot ${slotId}] Iniciando: ${item.name} | ${item.height}p ${encLabel}`);
 
   const proc = cp.spawn("ffmpeg", buildArgs(item), { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";

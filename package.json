@@ -5,9 +5,12 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64"
+    "build": "electron-builder --win --x64",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cover": "jest --coverage"
   },
-   "build": {
+  "build": {
     "appId": "com.nvenc.anime",
     "productName": "NVENC Anime Converter",
     "win": {
@@ -29,6 +32,7 @@
   },
   "devDependencies": {
     "electron": "^31.0.0",
-    "electron-builder": "^24.0.0"
+    "electron-builder": "^24.0.0",
+    "jest": "^30.3.0"
   }
 }

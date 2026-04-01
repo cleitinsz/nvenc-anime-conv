@@ -18,6 +18,10 @@ const fs   = require("fs");
 const os   = require("os");
 const cp   = require("child_process");
 
+const { fmtBitrate, runParallel }   = require("./src/utils/formatters");
+const { parseProgressFile }         = require("./src/utils/progressParser");
+const { buildArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/utils/ffmpegArgs");
+
 // ============================================================
 //  CONFIG PERSISTIDA  [FEAT]
 // ============================================================
@@ -113,27 +117,8 @@ function ffprobeAll(filePath) {
 }
 
 // ============================================================
-//  SCAN PARALELO  [PERF]
-//
-//  Roda N tarefas async ao mesmo tempo.
-//  concurrency=4 é o sweet spot para não saturar disco/CPU.
+//  SCAN PARALELO  [PERF]  → src/utils/formatters.js (runParallel)
 // ============================================================
-
-async function runParallel(tasks, concurrency = 4, onProgress) {
-  const results = new Array(tasks.length);
-  let nextIdx = 0;
-
-  async function worker() {
-    while (nextIdx < tasks.length) {
-      const i = nextIdx++;
-      results[i] = await tasks[i]();
-      onProgress?.(nextIdx, tasks.length);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
-  return results;
-}
 
 // ============================================================
 //  IPC — seleção de pasta
@@ -306,108 +291,7 @@ function killAllJobs() {
   if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
 }
 
-// ── Perfis de encode ─────────────────────────────────────────
-//
-//  anime      → hqdn3d (denoise leve) + gradfun (debanding)
-//               Ideal para conteúdo de animação: cores planas, bordas limpas.
-//
-//  liveaction → sem filtros de vídeo
-//               Preserva grain cinematográfico, textura de pele e detalhe 4K.
-//               AQ-strength maior compensa a ausência de denoise.
-
-const PROFILE_ENCODE = {
-  anime: {
-    vf:        "hqdn3d=1.2:1.2:5:5,gradfun",
-    aqStrength: "8",
-    // x265: aq-mode=3 (HEVC adaptive quant) + deblock suave para manter bordas
-    x265params: "aq-mode=3:aq-strength=0.8:deblock=-1,-1",
-  },
-  liveaction: {
-    vf:        null,   // preserva grain e textura
-    aqStrength: "10",
-    // x265: aq-mode=2 (variance-based), sem deblock personalizado
-    x265params: "aq-mode=2:aq-strength=1.0",
-  },
-};
-
-// ── Resolução de saída → filtro de escala ────────────────────
-//  Usa scale=-2:H para preservar aspect ratio e garantir largura par.
-//  Lanczos é o melhor algoritmo de downscale para vídeo.
-const SCALE_FILTER = { "1080p": "scale=-2:1080:flags=lanczos", "720p": "scale=-2:720:flags=lanczos" };
-
-function buildVF(profVf) {
-  const scale = SCALE_FILTER[config.outputRes]; // undefined quando "original"
-  if (scale && profVf) return `${scale},${profVf}`;
-  if (scale)           return scale;
-  if (profVf)          return profVf;
-  return null;
-}
-
-// ── GPU (NVENC) ───────────────────────────────────────────────
-function buildArgsGPU(item) {
-  const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
-  const cq   = item.height >= 1000 ? config.cqHD : config.cqSD;
-  const vf   = buildVF(prof.vf);
-
-  // -hwaccel cuda mantém frames na GPU — incompatível com filtros CPU (scale, hqdn3d).
-  // Quando há qualquer filtro de vídeo ativo, usa decode por CPU para garantir
-  // que os filtros sejam aplicados. O encode ainda acontece na GPU via hevc_nvenc.
-  const args = ["-y"];
-  if (!vf) args.push("-hwaccel", "cuda");
-  args.push("-i", item.fullPath, "-map", "0:V", "-map", "0:a:0", "-map", "0:s?");
-
-  if (vf) args.push("-vf", vf);
-
-  args.push(
-    "-c:v", "hevc_nvenc",
-    "-gpu",    String(config.gpu),
-    "-preset", config.preset,
-    "-rc",     "vbr",
-    "-cq",     String(cq), "-b:v", "0",
-    "-spatial-aq", "1", "-aq-strength", prof.aqStrength,
-    "-profile:v", "main10", "-pix_fmt", "p010le",
-    "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
-    "-progress", item.progressFile,
-    item.saida,
-  );
-
-  return args;
-}
-
-// ── CPU (libx265) ─────────────────────────────────────────────
-//  Melhor eficiência de compressão que NVENC; mais lento.
-//  Usa CRF (mesmo campo cqHD/cqSD da config, mas escala diferente:
-//  CRF 18-24 ≈ qualidade alta; NVENC CQ 24-28 equivalente visual).
-function buildArgsCPU(item) {
-  const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
-  const crf  = item.height >= 1000 ? config.cqHD : config.cqSD;
-  const vf   = buildVF(prof.vf);
-
-  const args = [
-    "-y",
-    "-i", item.fullPath,
-    "-map", "0:V", "-map", "0:a:0", "-map", "0:s?",
-  ];
-
-  if (vf) args.push("-vf", vf);
-
-  args.push(
-    "-c:v", "libx265",
-    "-preset",    config.cpuPreset,
-    "-crf",       String(crf),
-    "-x265-params", prof.x265params,
-    "-pix_fmt",   "yuv420p10le",
-    "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
-    "-progress", item.progressFile,
-    item.saida,
-  );
-
-  return args;
-}
-
-function buildArgs(item) {
-  return config.encoder === "cpu" ? buildArgsCPU(item) : buildArgsGPU(item);
-}
+// ── Perfis / args ffmpeg → src/utils/ffmpegArgs.js ───────────
 
 function startSlot(slotId, item) {
   const progressFile = path.join(os.tmpdir(), `nvenc_s${slotId}_${Date.now()}.tmp`);
@@ -419,7 +303,7 @@ function startSlot(slotId, item) {
     : `GPU NVENC CQ${qual} [${config.preset}]`;
   log("INFO", `[Slot ${slotId}] Iniciando: ${item.name} | ${item.height}p ${encLabel}`);
 
-  const proc = cp.spawn("ffmpeg", buildArgs(item), { stdio: ["ignore", "ignore", "pipe"] });
+  const proc = cp.spawn("ffmpeg", buildArgs(item, config), { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
   proc.stderr.on("data", d => { stderr += d; });
 
@@ -521,26 +405,8 @@ function fillSlots() {
 
 // ============================================================
 //  POLL — lê fps / speed / bitrate do progress file  [PERF/UX]
+//  → parseProgressFile e fmtBitrate em src/utils/progressParser.js / formatters.js
 // ============================================================
-
-function parseProgressFile(filePath) {
-  try {
-    const lines = fs.readFileSync(filePath, "utf8").split("\n");
-    const get   = key => lines.filter(l => l.startsWith(key + "=")).pop()?.split("=")[1]?.trim() ?? "";
-    return {
-      out_time_ms: parseInt(get("out_time_ms")) || 0,
-      fps:         parseFloat(get("fps"))        || 0,
-      speed:       get("speed"),
-      bitrate:     get("bitrate"),
-    };
-  } catch { return null; }
-}
-
-function fmtBitrate(raw) {
-  if (!raw || raw === "N/A") return "";
-  const kbps = parseFloat(raw);
-  return kbps >= 1000 ? `${(kbps/1000).toFixed(1)} Mbps` : `${Math.round(kbps)} kbps`;
-}
 
 function pollProgress() {
   for (const [sidStr, slot] of Object.entries(slots)) {

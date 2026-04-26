@@ -33,12 +33,13 @@ function loadConfig() {
     gpu: 0, preset: "p6", jobs: 2,
     sufixo: "_hevc", cqHD: 28, cqSD: 26,
     deletarOriginal: false, lastFolder: null,
-    outputMode: "encoded",  // "same" | "encoded" | "custom"
-    outputFolder: null,      // usado só quando outputMode === "custom"
-    profile: "anime",        // "anime" | "liveaction"
-    encoder: "nvenc",        // "nvenc" | "cpu"
-    cpuPreset: "medium",     // preset do libx265: faster | fast | medium | slow | slower
-    outputRes: "original",   // "original" | "1080p" | "720p"
+    outputMode: "encoded",
+    outputFolder: null,
+    profile: "anime",
+    encoder: "nvenc",
+    cpuPreset: "medium",
+    outputRes: "original",
+    lang: "ptBR",
   };
   try {
     return { ...defaults, ...JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) };
@@ -55,10 +56,40 @@ function saveConfig(cfg) {
 }
 
 let config = loadConfig();
+L = LOG_STRINGS[config.lang] || LOG_STRINGS.ptBR;
 
 // ============================================================
 //  JANELA
 // ============================================================
+
+const LOG_STRINGS = {
+  ptBR: {
+    slotStart:   (id, name, h, enc) => `[Slot ${id}] Iniciando: ${name} | ${h}p ${enc}`,
+    slotSuspect: (id, kb, name)     => `[Slot ${id}] Saída suspeita (${kb}KB): ${name}`,
+    slotDone:    (id, name, mb1, mb2, pct, min) => `[Slot ${id}] ${name} | ${mb1}MB → ${mb2}MB (-${pct}%) | ${min}min`,
+    slotDeleted: (id, name)       => `[Slot ${id}] Original deletado: ${name}`,
+    slotFailed:  (id, name, code)  => `[Slot ${id}] FALHA: ${name} | ExitCode ${code}`,
+    slotCause:   (err)             => `  CAUSA: ${err}`,
+    sessionDone: (done, errs, gb, min) => `=== Concluído | Convertidos: ${done} | Erros: ${errs} | Ganho: ${gb} GB | Tempo: ${min}min ===`,
+    starting:    (n, jobs, gpu, preset) => `Iniciando | ${n} arquivos | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
+    retrying:    (n)              => `Retentando ${n} arquivo(s) com erro...`,
+    stopped:     ()               => "Conversão interrompida pelo usuário.",
+  },
+  en: {
+    slotStart:   (id, name, h, enc) => `[Slot ${id}] Starting: ${name} | ${h}p ${enc}`,
+    slotSuspect: (id, kb, name)    => `[Slot ${id}] Suspicious output (${kb}KB): ${name}`,
+    slotDone:    (id, name, mb1, mb2, pct, min) => `[Slot ${id}] ${name} | ${mb1}MB → ${mb2}MB (-${pct}%) | ${min}min`,
+    slotDeleted: (id, name)        => `[Slot ${id}] Original deleted: ${name}`,
+    slotFailed:  (id, name, code)  => `[Slot ${id}] FAILED: ${name} | ExitCode ${code}`,
+    slotCause:   (err)             => `  REASON: ${err}`,
+    sessionDone: (done, errs, gb, min) => `=== Done | Converted: ${done} | Errors: ${errs} | Saved: ${gb} GB | Time: ${min}min ===`,
+    starting:    (n, jobs, gpu, preset) => `Starting | ${n} files | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
+    retrying:    (n)              => `Retrying ${n} file(s) with errors...`,
+    stopped:     ()               => "Conversion stopped by user.",
+  },
+};
+
+let L = LOG_STRINGS.ptBR;
 
 let mainWindow = null;
 
@@ -256,6 +287,7 @@ ipcMain.handle("scan-folder", async (_, folderPath) => {
 
 ipcMain.on("set-config", (_, newCfg) => {
   config = { ...config, ...newCfg };
+  L = LOG_STRINGS[config.lang] || LOG_STRINGS.ptBR;
   saveConfig(config);
 });
 
@@ -301,7 +333,7 @@ function startSlot(slotId, item) {
   const encLabel = config.encoder === "cpu"
     ? `CPU x265 CRF${qual} [${config.cpuPreset}]`
     : `GPU NVENC CQ${qual} [${config.preset}]`;
-  log("INFO", `[Slot ${slotId}] Iniciando: ${item.name} | ${item.height}p ${encLabel}`);
+  log("INFO", L.slotStart(slotId, item.name, item.height, encLabel));
 
   const proc = cp.spawn("ffmpeg", buildArgs(item, config), { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
@@ -326,7 +358,7 @@ function finishSlot(slotId, code) {
   if (code === 0 && fs.existsSync(item.saida)) {
     const sizeAfter = fs.statSync(item.saida).size;
     if (sizeAfter < 100 * 1024) {
-      log("ERRO", `[Slot ${slotId}] Saída suspeita (${Math.round(sizeAfter/1024)}KB): ${item.name}`);
+      log("ERRO", L.slotSuspect(slotId, Math.round(sizeAfter/1024), item.name));
       try { fs.unlinkSync(item.saida); } catch {}
       errorCount++;
       mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "error" });
@@ -337,14 +369,14 @@ function finishSlot(slotId, code) {
       statsAntes  += item.size;
       statsDepois += sizeAfter;
       doneCount++;
-      log("OK", `[Slot ${slotId}] ${item.name} | ${mb1}MB → ${mb2}MB (-${reducao}%) | ${durConv}min`);
+      log("OK", L.slotDone(slotId, item.name, mb1, mb2, reducao, durConv));
       mainWindow?.webContents.send("file-status", {
         fullPath: item.fullPath, status: "done",
         mb1: parseFloat(mb1), mb2: parseFloat(mb2), reducao,
       });
       if (config.deletarOriginal) {
         try { fs.unlinkSync(item.fullPath); } catch {}
-        log("INFO", `[Slot ${slotId}] Original deletado: ${item.name}`);
+        log("INFO", L.slotDeleted(slotId, item.name));
       }
     }
   } else {
@@ -355,8 +387,8 @@ function finishSlot(slotId, code) {
       .slice(-5);
     const lastError   = errorLines.pop() || stderrLines.slice(-2).join(" | ") || "sem mensagem";
 
-    log("ERRO", `[Slot ${slotId}] FALHA: ${item.name} | ExitCode ${code}`);
-    log("ERRO", `  CAUSA: ${lastError}`);
+    log("ERRO", L.slotFailed(slotId, item.name, code));
+    log("ERRO", L.slotCause(lastError));
 
     // Loga linhas adicionais de contexto se houver mais de uma linha de erro
     for (const l of errorLines) {
@@ -381,7 +413,7 @@ function finishSession() {
   const ganhoGB  = ((statsAntes - statsDepois) / 1073741824).toFixed(2);
   const totalMin = ((Date.now() - sessionStart) / 60000).toFixed(1);
 
-  log("OK", `=== Concluído | Convertidos: ${doneCount} | Erros: ${errorCount} | Ganho: ${ganhoGB} GB | Tempo: ${totalMin}min ===`);
+  log("OK", L.sessionDone(doneCount, errorCount, ganhoGB, totalMin));
   mainWindow?.webContents.send("conversion-done", {
     convertidos: doneCount, erros: errorCount, ignorados: ignoredCount, ganhoGB: parseFloat(ganhoGB),
   });
@@ -503,7 +535,7 @@ ipcMain.on("start-conversion", (_, files) => {
   totalJobs = doneCount = errorCount = 0;
   ignoredCount = files.filter(f => f.status !== "queue").length;
   statsAntes = statsDepois = 0;
-  log("INFO", `Iniciando | ${queue.length} arquivos | ${config.jobs} jobs | GPU ${config.gpu} | Preset ${config.preset}`);
+  log("INFO", L.starting(queue.length, config.jobs, config.gpu, config.preset));
   fillSlots();
   pollInterval = setInterval(pollProgress, 800);
 });
@@ -511,7 +543,7 @@ ipcMain.on("start-conversion", (_, files) => {
 // [STAB] Retry sem reiniciar sessão
 ipcMain.on("retry-errors", (_, errorFiles) => {
   if (errorFiles.length === 0) return;
-  log("INFO", `Retentando ${errorFiles.length} arquivo(s) com erro...`);
+  log("INFO", L.retrying(errorFiles.length));
   for (const f of errorFiles) {
     mainWindow?.webContents.send("file-status", { fullPath: f.fullPath, status: "queue", progress: 0 });
   }
@@ -528,7 +560,7 @@ ipcMain.on("retry-errors", (_, errorFiles) => {
 
 ipcMain.on("stop-conversion", () => {
   running = false;
-  log("AVISO", "Conversão interrompida pelo usuário.");
+  log("AVISO", L.stopped());
   killAllJobs();
   mainWindow?.webContents.send("reset-converting");
 });

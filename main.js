@@ -607,7 +607,7 @@ ipcMain.handle("preview-generate", async (event, { fullPath, timestampPct, confi
     }
 
     if (vfArg.length > 0) {
-      excerptArgs.push(vfArg);
+      excerptArgs.push(...vfArg);
     }
 
     excerptArgs.push("-an", excerptPath);

@@ -534,3 +534,121 @@ ipcMain.on("stop-conversion", () => {
 });
 
 ipcMain.on("open-log-folder", () => shell.openPath(app.getPath("userData")));
+
+// ============================================================
+//  PREVIEW GENERATION — visual comparison before/after
+// ============================================================
+
+const PREVIEW_TMP = os.tmpdir();
+
+ipcMain.handle("preview-generate", async (event, { fullPath, timestampPct, config }) => {
+  const id       = Date.now();
+  const origPath = path.join(PREVIEW_TMP, `preview_orig_${id}.png`);
+  const convPath = path.join(PREVIEW_TMP, `preview_conv_${id}.png`);
+  const excerptPath = path.join(PREVIEW_TMP, `preview_${id}.mkv`);
+
+  function sendProgress(stage, pct) {
+    mainWindow?.webContents.send("preview-progress", { stage, pct });
+  }
+
+  try {
+    const meta = await ffprobeAll(fullPath);
+    const duracao = meta.duracao || 0;
+    const timestampSec = duracao > 0 ? duracao * timestampPct : 0;
+
+    sendProgress("Extraindo frame original...", 10);
+
+    await new Promise((resolve, reject) => {
+      const args = [
+        "-ss", String(timestampSec),
+        "-i", fullPath,
+        "-vframes", "1",
+        "-q:v", "2",
+        origPath
+      ];
+      const proc = cp.spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+      let stderr = "";
+      proc.stderr.on("data", d => { stderr += d; });
+      proc.on("close", code => code === 0 ? resolve() : reject(new Error(stderr.slice(-200))) );
+    });
+
+    sendProgress("Gerando excerpt (10s)...", 30);
+
+    const filters = [];
+    if (config.profile === "anime") {
+      filters.push("hqdn3d=1.2:1.2:5:5", "gradfun");
+    }
+    const vfArg = filters.length > 0 ? ["-vf", filters.join(",")] : [];
+
+    const cq = config.encoder === "cpu"
+      ? (config.cqHD || 20)
+      : (config.cqHD || 28);
+
+    const excerptArgs = [
+      "-ss", String(timestampSec),
+      "-i", fullPath,
+      "-t", "10",
+    ];
+
+    if (config.encoder === "cpu") {
+      excerptArgs.push(
+        "-c:v", "libx265",
+        "-preset", config.cpuPreset || "medium",
+        "-crf", String(cq),
+      );
+    } else {
+      const preset = config.preset || "p6";
+      excerptArgs.push(
+        "-c:v", "hevc_nvenc",
+        "-preset", preset,
+        "-rc", "constqp",
+        "-cqp", String(cq),
+        "-qmin", String(cq),
+        "-qmax", String(cq),
+      );
+    }
+
+    if (vfArg.length > 0) {
+      excerptArgs.push(vfArg);
+    }
+
+    excerptArgs.push("-an", excerptPath);
+
+    await new Promise((resolve, reject) => {
+      const proc = cp.spawn("ffmpeg", excerptArgs, { stdio: ["ignore", "pipe", "pipe"] });
+      let stderr = "";
+      proc.stderr.on("data", d => { stderr += d; });
+      proc.on("close", code => code === 0 ? resolve() : reject(new Error(stderr.slice(-200))) );
+    });
+
+    sendProgress("Extraindo frame convertido...", 70);
+
+    await new Promise((resolve, reject) => {
+      const args = ["-ss", "5", "-i", excerptPath, "-vframes", "1", "-q:v", "2", convPath];
+      const proc = cp.spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+      let stderr = "";
+      proc.stderr.on("data", d => { stderr += d; });
+      proc.on("close", code => code === 0 ? resolve() : reject(new Error(stderr.slice(-200))) );
+    });
+
+    sendProgress("Enviando frames...", 90);
+
+    const fs2 = require("fs");
+    const frameOrigBase64 = fs2.readFileSync(origPath).toString("base64");
+    const frameConvBase64 = fs2.readFileSync(convPath).toString("base64");
+
+    try { fs2.unlinkSync(origPath); } catch {}
+    try { fs2.unlinkSync(convPath); } catch {}
+    try { fs2.unlinkSync(excerptPath); } catch {}
+
+    sendProgress("Concluído", 100);
+
+    return { frameOrig: frameOrigBase64, frameConv: frameConvBase64 };
+  } catch (err) {
+    try { require("fs").unlinkSync(origPath); } catch {}
+    try { require("fs").unlinkSync(convPath); } catch {}
+    try { require("fs").unlinkSync(excerptPath); } catch {}
+
+    throw err;
+  }
+});

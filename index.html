@@ -1347,7 +1347,17 @@ function EmptyState({onSelect}) {
 
 // ── App principal ────────────────────────────────────────────
 
+function LangRoot() {
+  const [lang, setLang] = useState("ptBR");
+  return (
+    <LanguageProvider lang={lang} setLang={setLang}>
+      <App />
+    </LanguageProvider>
+  );
+}
+
 function App() {
+  const { t, lang, setLang } = useT();
   const [cfg,       setCfg]      = useState({gpu:0,preset:"p6",jobs:2,cqHD:28,cqSD:26,deletarOriginal:false,profile:"anime",encoder:"nvenc",cpuPreset:"medium",outputRes:"original"});
   const [folder,    setFolder]   = useState(null);
   const [outputFolder, setOutputFolder] = useState(null);
@@ -1397,6 +1407,7 @@ function App() {
       setCfg(prev=>({...prev,...c}));
       if (c.lastFolder)   setFolder(c.lastFolder);
       if (c.outputFolder) setOutputFolder(c.outputFolder);
+      if (c.lang)         setLang(c.lang);
     });
     window.api.on("log",           addLog);
     window.api.on("stats",         setStats);
@@ -1426,6 +1437,7 @@ function App() {
   },[addLog,updateFile]);
 
   useEffect(()=>{ window.api.setConfig(cfg); },[cfg]);
+  useEffect(()=>{ window.api.setConfig({...cfg, lang}); },[lang]);
 
   async function handleSelectFolder() {
     const p = await window.api.selectFolder();
@@ -1491,6 +1503,7 @@ function App() {
         <div style={{flex:1}}/>
 
         <div style={{display:"flex",alignItems:"center",gap:6,WebkitAppRegion:"no-drag"}}>
+          <LangToggle lang={lang} onToggle={()=>setLang(l=>l==="ptBR"?"en":"ptBR")}/>
           <div style={{width:7,height:7,borderRadius:"50%",
             background:running?"var(--green)":scanning?"var(--yellow)":"var(--muted)",
             boxShadow:running?"0 0 8px var(--green)":"none",
@@ -1565,7 +1578,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+ReactDOM.createRoot(document.getElementById("root")).render(<LangRoot/>);
 </script>
 </body>
 </html>

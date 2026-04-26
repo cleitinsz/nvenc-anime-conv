@@ -27,7 +27,8 @@
     "files": [
       "main.js",
       "preload.js",
-      "index.html"
+      "index.html",
+      "src/**/*"
     ]
   },
   "devDependencies": {

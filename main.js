@@ -28,6 +28,35 @@ const { buildArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/util
 
 const CONFIG_PATH = path.join(app.getPath("userData"), "config.json");
 
+const LOG_STRINGS = {
+  ptBR: {
+    slotStart:   (id, name, h, enc) => `[Slot ${id}] Iniciando: ${name} | ${h}p ${enc}`,
+    slotSuspect: (id, kb, name)     => `[Slot ${id}] Saída suspeita (${kb}KB): ${name}`,
+    slotDone:    (id, name, mb1, mb2, pct, min) => `[Slot ${id}] ${name} | ${mb1}MB → ${mb2}MB (-${pct}%) | ${min}min`,
+    slotDeleted: (id, name)       => `[Slot ${id}] Original deletado: ${name}`,
+    slotFailed:  (id, name, code)  => `[Slot ${id}] FALHA: ${name} | ExitCode ${code}`,
+    slotCause:   (err)             => `  CAUSA: ${err}`,
+    sessionDone: (done, errs, gb, min) => `=== Concluído | Convertidos: ${done} | Erros: ${errs} | Ganho: ${gb} GB | Tempo: ${min}min ===`,
+    starting:    (n, jobs, gpu, preset) => `Iniciando | ${n} arquivos | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
+    retrying:    (n)              => `Retentando ${n} arquivo(s) com erro...`,
+    stopped:     ()               => "Conversão interrompida pelo usuário.",
+  },
+  en: {
+    slotStart:   (id, name, h, enc) => `[Slot ${id}] Starting: ${name} | ${h}p ${enc}`,
+    slotSuspect: (id, kb, name)    => `[Slot ${id}] Suspicious output (${kb}KB): ${name}`,
+    slotDone:    (id, name, mb1, mb2, pct, min) => `[Slot ${id}] ${name} | ${mb1}MB → ${mb2}MB (-${pct}%) | ${min}min`,
+    slotDeleted: (id, name)        => `[Slot ${id}] Original deleted: ${name}`,
+    slotFailed:  (id, name, code)  => `[Slot ${id}] FAILED: ${name} | ExitCode ${code}`,
+    slotCause:   (err)             => `  REASON: ${err}`,
+    sessionDone: (done, errs, gb, min) => `=== Done | Converted: ${done} | Errors: ${errs} | Saved: ${gb} GB | Time: ${min}min ===`,
+    starting:    (n, jobs, gpu, preset) => `Starting | ${n} files | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
+    retrying:    (n)              => `Retrying ${n} file(s) with errors...`,
+    stopped:     ()               => "Conversion stopped by user.",
+  },
+};
+
+let L = LOG_STRINGS.ptBR;
+
 function loadConfig() {
   const defaults = {
     gpu: 0, preset: "p6", jobs: 2,
@@ -61,35 +90,6 @@ L = LOG_STRINGS[config.lang] || LOG_STRINGS.ptBR;
 // ============================================================
 //  JANELA
 // ============================================================
-
-const LOG_STRINGS = {
-  ptBR: {
-    slotStart:   (id, name, h, enc) => `[Slot ${id}] Iniciando: ${name} | ${h}p ${enc}`,
-    slotSuspect: (id, kb, name)     => `[Slot ${id}] Saída suspeita (${kb}KB): ${name}`,
-    slotDone:    (id, name, mb1, mb2, pct, min) => `[Slot ${id}] ${name} | ${mb1}MB → ${mb2}MB (-${pct}%) | ${min}min`,
-    slotDeleted: (id, name)       => `[Slot ${id}] Original deletado: ${name}`,
-    slotFailed:  (id, name, code)  => `[Slot ${id}] FALHA: ${name} | ExitCode ${code}`,
-    slotCause:   (err)             => `  CAUSA: ${err}`,
-    sessionDone: (done, errs, gb, min) => `=== Concluído | Convertidos: ${done} | Erros: ${errs} | Ganho: ${gb} GB | Tempo: ${min}min ===`,
-    starting:    (n, jobs, gpu, preset) => `Iniciando | ${n} arquivos | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
-    retrying:    (n)              => `Retentando ${n} arquivo(s) com erro...`,
-    stopped:     ()               => "Conversão interrompida pelo usuário.",
-  },
-  en: {
-    slotStart:   (id, name, h, enc) => `[Slot ${id}] Starting: ${name} | ${h}p ${enc}`,
-    slotSuspect: (id, kb, name)    => `[Slot ${id}] Suspicious output (${kb}KB): ${name}`,
-    slotDone:    (id, name, mb1, mb2, pct, min) => `[Slot ${id}] ${name} | ${mb1}MB → ${mb2}MB (-${pct}%) | ${min}min`,
-    slotDeleted: (id, name)        => `[Slot ${id}] Original deleted: ${name}`,
-    slotFailed:  (id, name, code)  => `[Slot ${id}] FAILED: ${name} | ExitCode ${code}`,
-    slotCause:   (err)             => `  REASON: ${err}`,
-    sessionDone: (done, errs, gb, min) => `=== Done | Converted: ${done} | Errors: ${errs} | Saved: ${gb} GB | Time: ${min}min ===`,
-    starting:    (n, jobs, gpu, preset) => `Starting | ${n} files | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
-    retrying:    (n)              => `Retrying ${n} file(s) with errors...`,
-    stopped:     ()               => "Conversion stopped by user.",
-  },
-};
-
-let L = LOG_STRINGS.ptBR;
 
 let mainWindow = null;
 

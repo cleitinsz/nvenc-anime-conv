@@ -902,6 +902,7 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
 // ── Slots ativos com fps/speed/bitrate ──────────────────────
 
 function ActiveSlots({slots, totalConversoes}) {
+  const { t } = useT();
   const active = Object.values(slots).filter(s=>s.name);
   if (active.length===0) return null;
   return (
@@ -923,7 +924,7 @@ function ActiveSlots({slots, totalConversoes}) {
               {slot.fps    && <span style={{fontSize:9,color:"#7ecfff"}}>{slot.fps}</span>}
               {slot.speed  && <span style={{fontSize:9,color:"var(--yellow)",fontWeight:700}}>{slot.speed}</span>}
               {slot.bitrate&& <span style={{fontSize:9,color:"var(--muted)"}}>{slot.bitrate}</span>}
-              <span style={{fontSize:9,color:"var(--muted)"}}>ETA {slot.eta||"--:--"}</span>
+              <span style={{fontSize:9,color:"var(--muted)"}}>{t("slotEta")} {slot.eta||"--:--"}</span>
             </div>
           </div>
           <div style={{fontSize:10,color:"var(--text)",marginBottom:7,
@@ -1219,6 +1220,7 @@ function FileList({files, filter, setFilter}) {
 // ── Log viewer com auto-scroll e pin ─────────────────────────
 
 function LogViewer({logs}) {
+  const { t } = useT();
   const ref = useRef(null);
   const [pinned, setPinned] = useState(true);
   const LVL = {OK:"var(--green)",ERRO:"var(--accent2)",AVISO:"var(--yellow)",DEBUG:"var(--muted)",INFO:"var(--text)"};
@@ -1231,13 +1233,13 @@ function LogViewer({logs}) {
     <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",
         padding:"5px 14px",borderBottom:"1px solid var(--border)",gap:8}}>
-        <span style={{fontSize:9,color:"var(--muted)"}}>{logs.length} linhas</span>
+        <span style={{fontSize:9,color:"var(--muted)"}}>{t("logLines")(logs.length)}</span>
         <button className="btn" onClick={()=>setPinned(p=>!p)} style={{
           background:pinned?"#00e5ff18":"transparent",
           border:`1px solid ${pinned?"var(--accent)":"var(--border)"}`,
           color:pinned?"var(--accent)":"var(--muted)",
           borderRadius:5,padding:"3px 8px",fontSize:9,fontWeight:700}}>
-          {pinned?"📌 FIXADO":"FIXAR"}
+          {pinned ? t("logPinned") : t("logPin")}
         </button>
       </div>
       <div ref={ref} onScroll={e=>{
@@ -1258,7 +1260,7 @@ function LogViewer({logs}) {
         ))}
         {logs.length===0&&(
           <div style={{color:"var(--muted)",fontSize:11,marginTop:16}}>
-            Aguardando início da conversão...
+            {t("logWaiting")}
           </div>
         )}
       </div>
@@ -1442,9 +1444,10 @@ function ComparisonModal({ file, config, onClose }) {
 // ── Tela de scan (com barra de progresso do scan)  ───────────
 
 function ScanScreen({scanProg}) {
+  const { t } = useT();
   const pct = scanProg && scanProg.total > 0
     ? Math.round(scanProg.scanned / scanProg.total * 100) : 0;
-  const phase = scanProg?.phase === "probe" ? "Lendo metadados (paralelo)..." : "Listando arquivos...";
+  const phase = scanProg?.phase === "probe" ? t("scanPhaseProbe") : t("scanPhaseListing");
 
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",
@@ -1457,7 +1460,7 @@ function ScanScreen({scanProg}) {
             <ProgressBar pct={pct} glow/>
           </div>
           <div style={{fontSize:11,color:"var(--muted)"}}>
-            {scanProg.scanned} / {scanProg.total} arquivos · {pct}%
+            {scanProg.scanned} / {scanProg.total} {t("scanFiles")} · {pct}%
           </div>
         </>
       )}
@@ -1466,15 +1469,16 @@ function ScanScreen({scanProg}) {
 }
 
 function EmptyState({onSelect}) {
+  const { t } = useT();
   return (
     <div style={{flex:1,display:"flex",flexDirection:"column",
       alignItems:"center",justifyContent:"center",gap:14,color:"var(--muted)"}}>
       <div style={{fontSize:44,opacity:.25}}>🎌</div>
-      <div style={{fontSize:13,fontWeight:700}}>Selecione uma pasta para começar</div>
+      <div style={{fontSize:13,fontWeight:700}}>{t("emptyTitle")}</div>
       <button className="btn" onClick={onSelect} style={{
         background:"#00e5ff18",border:"1px solid var(--accent)",color:"var(--accent)",
         borderRadius:8,padding:"9px 22px",fontSize:12,fontWeight:700,letterSpacing:1.5}}>
-        📁 SELECIONAR PASTA
+        {t("emptyBtn")}
       </button>
     </div>
   );
@@ -1644,7 +1648,7 @@ function App() {
             boxShadow:running?"0 0 8px var(--green)":"none",
             animation:(running||scanning)?"pulse-dot 2s infinite":"none"}}/>
           <span style={{fontSize:9,letterSpacing:1.5,color:"var(--muted)"}}>
-            {running?"CONVERTENDO":scanning?"ANALISANDO":"PRONTO"}
+            {running ? t("statusConverting") : scanning ? t("statusScanning") : t("statusReady")}
           </span>
         </div>
       </div>
@@ -1669,18 +1673,18 @@ function App() {
             <>
               {/* Stats */}
               <div style={{borderBottom:"1px solid var(--border)",padding:"9px 14px",display:"flex",gap:7}}>
-                <StatCard label="TOTAL"        value={totalConversoes}       sub="arquivos"/>
-                <StatCard label="CONVERTIDOS"  value={stats.done}            sub={`de ${totalConversoes}`} color="var(--green)"/>
-                <StatCard label="EM ENCODE"    value={stats.active}          sub="slots" color="var(--accent)"/>
-                <StatCard label="ERROS"        value={stats.errors}          sub="arquivos" color={stats.errors>0?"var(--accent2)":"var(--muted)"}/>
-                <StatCard label="ESPAÇO SALVO" value={`${stats.ganhoGB} GB`} sub="liberados" color="var(--yellow)"/>
+                <StatCard label={t("statTotal")}     value={totalConversoes}       sub={t("statFiles")}/>
+                <StatCard label={t("statConverted")} value={stats.done}            sub={t("statConvertedSub")(totalConversoes)} color="var(--green)"/>
+                <StatCard label={t("statEncoding")}  value={stats.active}          sub={t("statSlots")} color="var(--accent)"/>
+                <StatCard label={t("statErrors")}    value={stats.errors}          sub={t("statFiles")} color={stats.errors>0?"var(--accent2)":"var(--muted)"}/>
+                <StatCard label={t("statSaved")}     value={`${stats.ganhoGB} GB`} sub={t("statFreed")} color="var(--yellow)"/>
               </div>
 
               <ActiveSlots slots={slots} totalConversoes={totalConversoes}/>
 
               {/* Tabs */}
               <div style={{borderBottom:"1px solid var(--border)",display:"flex",padding:"0 14px"}}>
-                {[["files","📋 Arquivos"],["log","📄 Log"]].map(([id,lbl])=>(
+                {[["files", t("tabFiles")], ["log", t("tabLog")]].map(([id,lbl])=>(
                   <button key={id} className="btn" onClick={()=>setTab(id)} style={{
                     padding:"8px 13px",fontSize:11,background:"transparent",border:"none",
                     fontWeight:tab===id?700:400,

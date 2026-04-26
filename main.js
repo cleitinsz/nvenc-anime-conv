@@ -622,7 +622,7 @@ ipcMain.handle("preview-generate", async (event, { fullPath, timestampPct, confi
     sendProgress("Extraindo frame convertido...", 70);
 
     await new Promise((resolve, reject) => {
-      const args = ["-ss", "5", "-i", excerptPath, "-vframes", "1", "-q:v", "2", convPath];
+      const args = ["-ss", "0", "-i", excerptPath, "-vframes", "1", "-q:v", "2", convPath];
       const proc = cp.spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
       let stderr = "";
       proc.stderr.on("data", d => { stderr += d; });

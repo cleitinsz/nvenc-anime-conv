@@ -1556,8 +1556,8 @@ function App() {
     window.api.on("slot-clear",   ({slotId})=>setSlots(p=>{const n={...p};delete n[slotId];return n;}));
     window.api.on("file-status",  (d)=>{
       updateFile(d.fullPath,d);
-      if (d.status==="done") addToast(`Concluído: ${d.fullPath?.split(/[\\/]/).pop()}`, "✓", "var(--green)");
-      if (d.status==="error") addToast(`Erro: ${d.fullPath?.split(/[\\/]/).pop()}`, "✕", "var(--accent2)");
+      if (d.status==="done")  addToast(t("toastDone")(d.fullPath?.split(/[\\/]/).pop()), "✓", "var(--green)");
+      if (d.status==="error") addToast(t("toastError")(d.fullPath?.split(/[\\/]/).pop()), "✕", "var(--accent2)");
     });
     window.api.on("reset-converting",()=>{
       setFiles(p=>p.map(f=>f.status==="converting"?{...f,status:"queue",progress:0}:f));
@@ -1565,9 +1565,9 @@ function App() {
     });
     window.api.on("conversion-done",(d)=>{
       setRunning(false);
-      addLog({t:new Date().toLocaleTimeString("pt-BR",{hour12:false}),lvl:"OK",
-        msg:`Concluído — Convertidos: ${d.convertidos} | Erros: ${d.erros} | Ganho: ${d.ganhoGB} GB`});
-      addToast(`Sessão concluída · ${d.convertidos} arquivo(s) · ${d.ganhoGB} GB liberados`, "🏁", "var(--accent)");
+      addLog({t:new Date().toLocaleTimeString(t("locale"),{hour12:false}),lvl:"OK",
+        msg: t("logSessionDone")(d.convertidos, d.erros, d.ganhoGB)});
+      addToast(t("toastSession")(d.convertidos, d.ganhoGB), "🏁", "var(--accent)");
     });
     window.openPreviewModal = (file) => setPreviewFile(file);
     return ()=>{
@@ -1579,19 +1579,33 @@ function App() {
   useEffect(()=>{ window.api.setConfig(cfg); },[cfg]);
   useEffect(()=>{ window.api.setConfig({...cfg, lang}); },[lang]);
 
-  async function handleSelectFolder() {
+async function handleSelectFolder() {
     const p = await window.api.selectFolder();
     if (!p) return;
     setFolder(p); setFiles([]); setLogs([]);
     setStats({done:0,errors:0,active:0,queue:0,ganhoGB:"0.00",globalEta:""});
     setSlots({}); setScanProg(null); setScanning(true);
-    addLog({t:now(),lvl:"INFO",msg:`Pasta: ${p}`});
-    addLog({t:now(),lvl:"INFO",msg:"Analisando arquivos (scan paralelo)..."});
+    addLog({t:now(),lvl:"INFO",msg: t("logFolder")(p)});
+    addLog({t:now(),lvl:"INFO",msg: t("logScanning")});
     const result = await window.api.scanFolder(p);
     setFiles(result); setScanning(false); setScanProg(null);
     const q    = result.filter(f=>f.status==="queue").length;
     const skip = result.filter(f=>["done_skip","hevc_skip"].includes(f.status)).length;
-    addLog({t:now(),lvl:"INFO",msg:`${result.length} arquivos — ${q} na fila | ${skip} ignorados`});
+    addLog({t:now(),lvl:"INFO",msg: t("logScanResult")(result.length, q, skip)});
+  }
+
+  function now(){ return new Date().toLocaleTimeString(t("locale"),{hour12:false}); }
+
+  function etaHorario(etaStr) {
+    if (!etaStr) return null;
+    const match = etaStr.match(/(\d+)h\s*(\d+)min|(\d+)min\s*(\d+)s|(\d+)s/);
+    if (!match) return null;
+    let seg = 0;
+    if (match[1]) seg = parseInt(match[1])*3600 + parseInt(match[2])*60;
+    else if (match[3]) seg = parseInt(match[3])*60 + parseInt(match[4]);
+    else if (match[5]) seg = parseInt(match[5]);
+    const fim = new Date(Date.now() + seg*1000);
+    return fim.toLocaleTimeString(t("locale"),{hour:"2-digit",minute:"2-digit"});
   }
 
   function now(){ return new Date().toLocaleTimeString("pt-BR",{hour12:false}); }

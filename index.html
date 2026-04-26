@@ -944,8 +944,9 @@ function ActiveSlots({slots, totalConversoes}) {
 // ── Lista de arquivos com busca + context menu ───────────────
 
 function FileList({files, filter, setFilter}) {
+  const { t } = useT();
   const [search,  setSearch]  = useState("");
-  const [ctxMenu, setCtxMenu] = useState(null); // {x,y,file}
+  const [ctxMenu, setCtxMenu] = useState(null);
 
   const counts = useMemo(()=>({
     all:       files.filter(f=>!["done_skip","hevc_skip"].includes(f.status)).length,
@@ -963,17 +964,137 @@ function FileList({files, filter, setFilter}) {
   },[files,filter,search]);
 
   const FILTER_META = {
-    all:       {label:"Todos",  color:"var(--text)"},
-    queue:     {label:"Fila",   color:"var(--yellow)"},
-    converting:{label:"Encode", color:"var(--accent)"},
-    done:      {label:"Prontos",color:"var(--green)"},
-    error:     {label:"Erros",  color:"var(--accent2)"},
+    all:       {label:t("filterAll"),      color:"var(--text)"},
+    queue:     {label:t("filterQueue"),    color:"var(--yellow)"},
+    converting:{label:t("filterEncoding"), color:"var(--accent)"},
+    done:      {label:t("filterDone"),     color:"var(--green)"},
+    error:     {label:t("filterErrors"),   color:"var(--accent2)"},
   };
 
   function openCtx(e,file){
     e.preventDefault();
     setCtxMenu({x:e.clientX,y:e.clientY,file});
   }
+
+  function ctxItems(file){
+    return [
+      {icon:"🔍",label:t("ctxCompare"),    action:()=>window.openPreviewModal?.(file)},
+      {icon:"📂",label:t("ctxOpenFolder"), action:()=>window.api?.openPath?.(file.dir)},
+      {icon:"📋",label:t("ctxCopyPath"),   action:()=>navigator.clipboard.writeText(file.fullPath)},
+    ];
+  }
+
+  return (
+    <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* Toolbar */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 14px",
+        borderBottom:"1px solid var(--border)"}}>
+        <div style={{display:"flex",gap:3,flex:1,flexWrap:"wrap"}}>
+          {Object.entries(FILTER_META).map(([id,meta])=>{
+            const active = filter===id;
+            const count  = counts[id];
+            return (
+              <button key={id} className="btn" onClick={()=>setFilter(id)} style={{
+                padding:"4px 9px",borderRadius:5,fontSize:10,fontWeight:700,
+                background:active?`${meta.color}18`:"transparent",
+                border:`1px solid ${active?meta.color:"transparent"}`,
+                color:active?meta.color:"var(--muted)",
+                display:"flex",alignItems:"center",gap:5}}>
+                {meta.label}
+                <span style={{
+                  background:active?`${meta.color}22`:"var(--muted2)",
+                  color:active?meta.color:"var(--muted)",
+                  borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:800,minWidth:18,textAlign:"center"}}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{position:"relative"}}>
+          <span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",
+            fontSize:11,color:"var(--muted)",pointerEvents:"none"}}>🔍</span>
+          <input
+            value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder={t("searchPlaceholder")}
+            style={{background:"#05090f",border:"1px solid var(--border)",borderRadius:6,
+              padding:"5px 8px 5px 26px",color:"var(--text)",fontSize:10,
+              fontFamily:"var(--mono)",width:180,outline:"none"}}
+          />
+          {search && (
+            <button className="btn" onClick={()=>setSearch("")}
+              style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",
+                background:"none",border:"none",color:"var(--muted)",fontSize:12,padding:0}}>
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* List */}
+      <div style={{flex:1,overflowY:"auto",padding:"5px 8px"}}
+        onClick={()=>setCtxMenu(null)}>
+        {filtered.length===0 && (
+          <div style={{textAlign:"center",color:"var(--muted)",fontSize:11,padding:40}}>
+            {search ? t("noResults")(search) : t("noFiles")}
+          </div>
+        )}
+        {filtered.map((f,i)=>(
+          <div key={f.fullPath||i} className="file-row"
+            onContextMenu={e=>openCtx(e,f)}
+            style={{
+              background:f.status==="converting"?"#00e5ff07":
+                         f.status==="error"?"#ff408107":
+                         f.status==="done"?"#00e67605":"transparent",
+              borderColor:f.status==="converting"?"#00e5ff1a":
+                           f.status==="error"?"#ff40811a":
+                           f.status==="done"?"#00e67618":"transparent"}}>
+            <Badge status={f.status}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:10,
+                color:f.status==="error"?"var(--accent2)":
+                      f.status==="done"?"var(--text)":"var(--text)",
+                whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+                marginBottom:f.status==="converting"?5:0}}>
+                {f.name}
+              </div>
+              {f.status==="converting" && <ProgressBar pct={f.progress||0} height={4} glow/>}
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,fontSize:10}}>
+              {f.status==="done"&&f.mb2!=null ? (
+                <>
+                  <span style={{color:"var(--muted)",fontSize:9}}>{f.mb1} MB</span>
+                  <span style={{color:"var(--muted)"}}>→</span>
+                  <span style={{color:"var(--green)",fontWeight:700}}>{f.mb2} MB</span>
+                  <span style={{color:"var(--green)",fontWeight:800",
+                    background:"#00e67614",border:"1px solid #00e67630",
+                    borderRadius:4,padding:"1px 6px",fontSize:9}}>
+                    -{f.reducao}%
+                  </span>
+                </>
+              ) : f.status==="converting" ? (
+                <span style={{color:"var(--accent)",fontSize:9}}>{t("slotEta")} {f.eta||"--:--"}</span>
+              ) : (
+                <span style={{color:"var(--muted)",fontSize:9}}>
+                  {f.size?(f.size/1048576).toFixed(1)+" MB":""}
+                </span>
+              )}
+              <span style={{color:"var(--muted2)",fontSize:9}}>CQ{f.cq||"?"}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x} y={ctxMenu.y}
+          items={ctxItems(ctxMenu.file)}
+          onClose={()=>setCtxMenu(null)}
+        />
+      )}
+    </div>
+  );
+}
 
   function ctxItems(file){
     return [

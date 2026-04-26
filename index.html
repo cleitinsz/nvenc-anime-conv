@@ -51,7 +51,7 @@ function useComparison() {
   useEffect(() => {
     function onProgress(p) { setProgress(p); }
     function onDone(f) {
-      setFrames(f);
+      setFrames({ orig: f.frameOrig, conv: f.frameConv });
       setState("done");
     }
     function onErr(e) {
@@ -69,6 +69,7 @@ function useComparison() {
   }, []);
 
   async function generate(fullPath, timestampPct, config) {
+    if (!fullPath) return;
     setState("generating");
     setProgress({ stage: "Iniciando...", pct: 0 });
     setError(null);

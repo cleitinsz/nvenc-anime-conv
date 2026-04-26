@@ -76,7 +76,7 @@ function useComparison() {
     setFrames(null);
     try {
       const result = await window.api.generatePreview(fullPath, timestampPct, config);
-      setFrames({ orig: result.frameOrig, conv: result.frameConv });
+      setFrames({ orig: result.frameConv, conv: result.frameOrig });
       setState("done");
     } catch (err) {
       setError(err.message || "Erro desconhecido");

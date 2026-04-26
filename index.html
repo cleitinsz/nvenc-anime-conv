@@ -635,20 +635,11 @@ function StatCard({label,value,sub,color="var(--text)"}) {
   );
 }
 
-// ── Perfis de encode ─────────────────────────────────────────
-const PROFILE_DEFAULTS = {
-  anime:      { label:"🎌 ANIME",       desc:"Denoise + debanding" },
-  liveaction: { label:"🎬 LIVE ACTION",  desc:"Sem filtros, grain preservado" },
-};
-
 // CQ/CRF padrão por encoder + perfil
 const ENCODER_PROFILE_CQ = {
   nvenc: { anime: {cqHD:28,cqSD:26}, liveaction: {cqHD:24,cqSD:22} },
   cpu:   { anime: {cqHD:20,cqSD:18}, liveaction: {cqHD:18,cqSD:16} },
 };
-
-const CPU_PRESETS  = [["faster","Rápido"],["fast","Balanceado"],["medium","Padrão"],["slow","Melhor"],["slower","Máximo"]];
-const NVENC_PRESETS = [["p4","Rápido"],["p5","Médio"],["p6","Recomendado"],["p7","Lento"]];
 
 // ── Sidebar section collapsible ──────────────────────────────
 function SideSection({title,children,defaultOpen=true}) {
@@ -673,6 +664,8 @@ function SideSection({title,children,defaultOpen=true}) {
 // ── Settings panel ───────────────────────────────────────────
 
 function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart,onStop,onRetry,running,scanning,folder,outputFolder,totalQueue,errorCount}) {
+  const { t } = useT();
+
   function set(k,v){onChange({...cfg,[k]:v});}
 
   function setProfile(p) {
@@ -689,12 +682,27 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
     });
   }
 
+  const PROFILE_DEFAULTS = {
+    anime:      { label: t("profileAnimeLabel"), desc: t("profileAnimeDesc") },
+    liveaction: { label: t("profileLiveLabel"),  desc: t("profileLiveDesc") },
+  };
+
+  const CPU_PRESETS = [
+    ["faster", t("presetFaster")], ["fast", t("presetFast")],
+    ["medium", t("presetMedium")], ["slow",  t("presetSlow")],
+    ["slower", t("presetSlower")],
+  ];
+  const NVENC_PRESETS = [
+    ["p4", t("presetNvencP4")], ["p5", t("presetNvencP5")],
+    ["p6", t("presetNvencP6")], ["p7", t("presetNvencP7")],
+  ];
+
   const disabled  = running||scanning;
   const isCPU     = (cfg.encoder||"nvenc") === "cpu";
   const presets   = isCPU ? CPU_PRESETS : NVENC_PRESETS;
   const presetKey = isCPU ? "cpuPreset" : "preset";
   const cqLabel   = isCPU ? "CRF" : "CQ";
-  const cqNote    = isCPU ? "Menor = melhor · escala 1–51" : "Menor = melhor qualidade";
+  const cqNote    = isCPU ? t("cqNoteCPU") : t("cqNoteNVENC");
 
   const optionBtn = (active, onClick, label, desc, dis=disabled) => (
     <button className="btn" onClick={()=>!dis&&onClick()} disabled={dis} style={{
@@ -713,13 +721,13 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
       display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
       <div style={{padding:"14px 16px 10px",borderBottom:"1px solid var(--border)"}}>
-        <div style={{fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:3}}>NVENC ANIME</div>
-        <div style={{fontSize:9,color:"var(--muted)",letterSpacing:1.5}}>H.265 CONVERTER v1.3</div>
+        <div style={{fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:3}}>{t("appName")}</div>
+        <div style={{fontSize:9,color:"var(--muted)",letterSpacing:1.5}}>{t("appVersion")}</div>
       </div>
 
       <div style={{flex:1,overflowY:"auto",padding:"4px 14px 14px",display:"flex",flexDirection:"column",gap:0}}>
 
-        <SideSection title="ENCODER">
+        <SideSection title={t("sectionEncoder")}>
           <div style={{display:"flex",gap:4,marginBottom:4,marginTop:2}}>
             {[["nvenc","⚡ GPU","NVENC"],["cpu","🖥 CPU","x265"]].map(([enc,icon,sub])=>{
               const active=(cfg.encoder||"nvenc")===enc;
@@ -739,61 +747,67 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
           {isCPU && <div style={{fontSize:9,color:"var(--yellow)",lineHeight:1.6,
             background:"#ffd74009",border:"1px solid #ffd74022",
             borderRadius:5,padding:"5px 8px"}}>
-            ⚠ Mais lento, comprime melhor. Use 1 job.
+            {t("cpuWarning")}
           </div>}
         </SideSection>
 
-        <SideSection title="PERFIL">
+        <SideSection title={t("sectionProfile")}>
           {Object.entries(PROFILE_DEFAULTS).map(([key,def])=>
             optionBtn((cfg.profile||"anime")===key, ()=>setProfile(key), def.label, def.desc)
           )}
         </SideSection>
 
-        <SideSection title="PASTA DE ENTRADA">
+        <SideSection title={t("sectionInputFolder")}>
           <div style={{background:"#05090f",border:"1px solid var(--border)",borderRadius:6,
             padding:"5px 8px",fontSize:9,color:folder?"var(--text)":"var(--muted)",
             wordBreak:"break-all",lineHeight:1.6,minHeight:32,marginTop:2}}>
-            {folder||"Nenhuma pasta selecionada"}
+            {folder||t("noFolder")}
           </div>
           <button className="btn" onClick={onSelectFolder} disabled={disabled} style={{
             width:"100%",marginTop:4,background:"var(--border)",border:"1px solid var(--border2)",
             color:"var(--muted)",borderRadius:6,padding:"6px 0",fontSize:10,fontWeight:700,letterSpacing:1}}>
-            📁 TROCAR PASTA
+            {t("btnChangeFolder")}
           </button>
         </SideSection>
 
-        <SideSection title="PASTA DE SAÍDA" defaultOpen={false}>
-          {[["same","Mesma pasta","Ao lado do original"],["encoded","Subpasta /encoded","Criada automaticamente"],["custom","Personalizada","Você escolhe"]]
-            .map(([mode,label,desc])=>optionBtn(cfg.outputMode===mode, ()=>set("outputMode",mode), label, desc))}
+        <SideSection title={t("sectionOutputFolder")} defaultOpen={false}>
+          {[
+            ["same",    t("outputSameLabel"),    t("outputSameDesc")],
+            ["encoded", t("outputEncodedLabel"), t("outputEncodedDesc")],
+            ["custom",  t("outputCustomLabel"),  t("outputCustomDesc")],
+          ].map(([mode,label,desc])=>optionBtn(cfg.outputMode===mode, ()=>set("outputMode",mode), label, desc))}
           {cfg.outputMode==="custom" && (
             <div style={{marginTop:4}}>
               <div style={{background:"#05090f",border:"1px solid var(--border)",borderRadius:6,
                 padding:"5px 8px",fontSize:9,lineHeight:1.5,minHeight:30,marginBottom:4,
                 color:outputFolder?"var(--text)":"var(--accent2)",wordBreak:"break-all"}}>
-                {outputFolder||"⚠ Nenhuma pasta selecionada"}
+                {outputFolder||t("noOutputFolder")}
               </div>
               <button className="btn" onClick={onSelectOutputFolder} disabled={disabled} style={{
                 width:"100%",background:"var(--border)",border:"1px solid var(--border2)",
                 color:"var(--muted)",borderRadius:6,padding:"5px 0",fontSize:10,fontWeight:700,letterSpacing:1}}>
-                📂 ESCOLHER PASTA
+                {t("btnChooseFolder")}
               </button>
             </div>
           )}
         </SideSection>
 
-        <SideSection title="RESOLUÇÃO DE SAÍDA" defaultOpen={false}>
-          {[["original","Manter","Sem downscale"],["1080p","→ 1080p","~60% menor"],["720p","→ 720p","~80% menor"]]
-            .map(([res,label,desc])=>optionBtn((cfg.outputRes||"original")===res, ()=>set("outputRes",res), label, desc))}
+        <SideSection title={t("sectionOutputRes")} defaultOpen={false}>
+          {[
+            ["original", t("resOriginalLabel"), t("resOriginalDesc")],
+            ["1080p",    t("res1080Label"),     t("res1080Desc")],
+            ["720p",     t("res720Label"),      t("res720Desc")],
+          ].map(([res,label,desc])=>optionBtn((cfg.outputRes||"original")===res, ()=>set("outputRes",res), label, desc))}
           {(cfg.outputRes||"original")!=="original" && (
             <div style={{fontSize:9,color:"var(--yellow)",lineHeight:1.6,
               background:"#ffd74009",border:"1px solid #ffd74022",
               borderRadius:5,padding:"5px 8px",marginTop:2}}>
-              ⚠ Arquivos HEVC também serão convertidos.
+              {t("resWarning")}
             </div>
           )}
         </SideSection>
 
-        <SideSection title="JOBS PARALELOS">
+        <SideSection title={t("sectionJobs")}>
           <div style={{display:"flex",gap:5,marginTop:2,marginBottom:4}}>
             {[1,2,3].map(n=>(
               <button key={n} className="btn" onClick={()=>set("jobs",n)} disabled={running} style={{
@@ -806,22 +820,22 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
             ))}
           </div>
           <div style={{fontSize:9,color:"var(--muted)"}}>
-            {isCPU ? "⚠ CPU: recomendado 1 job" : "⚠ Máx. consumer NVIDIA: 3"}
+            {isCPU ? t("jobsNoteCPU") : t("jobsNoteNVENC")}
           </div>
         </SideSection>
 
-        <SideSection title={isCPU?"PRESET x265":"PRESET NVENC"} defaultOpen={false}>
+        <SideSection title={isCPU ? t("sectionPresetCPU") : t("sectionPresetNVENC")} defaultOpen={false}>
           {presets.map(([p,desc])=>optionBtn(cfg[presetKey]===p, ()=>set(presetKey,p), p, desc, running))}
         </SideSection>
 
         {!isCPU && (
-          <SideSection title="GPU" defaultOpen={false}>
+          <SideSection title={t("sectionGPU")} defaultOpen={false}>
             {[0,1].map(g=>optionBtn(cfg.gpu===g, ()=>set("gpu",g), `GPU ${g}`, null, running))}
           </SideSection>
         )}
 
-        <SideSection title={`${cqLabel} (QUALIDADE)`}>
-          {[["cqHD","1080p+"],["cqSD","720p–"]].map(([key,lbl])=>(
+        <SideSection title={`${cqLabel} (${t("sectionQualitySuffix")})`}>
+          {[[`cqHD`, t("cqHDLabel")],[`cqSD`, t("cqSDLabel")]].map(([key,lbl])=>(
             <div key={key} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 0"}}>
               <span style={{fontSize:10,color:"var(--muted)"}}>{lbl}</span>
               <div style={{display:"flex",alignItems:"center",gap:5}}>
@@ -838,7 +852,7 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
           <div style={{fontSize:9,color:"var(--muted)",marginTop:2}}>{cqNote}</div>
         </SideSection>
 
-        <SideSection title="OPÇÕES" defaultOpen={false}>
+        <SideSection title={t("sectionOptions")} defaultOpen={false}>
           <label style={{display:"flex",alignItems:"center",gap:8,cursor:disabled?"default":"pointer",padding:"3px 0"}}>
             <div onClick={()=>!disabled&&set("deletarOriginal",!cfg.deletarOriginal)} style={{
               width:30,height:16,borderRadius:99,
@@ -848,20 +862,20 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
               <div style={{position:"absolute",top:2,left:cfg.deletarOriginal?15:2,
                 width:12,height:12,borderRadius:"50%",background:"white",transition:"left .15s"}}/>
             </div>
-            <span style={{fontSize:10,color:"var(--muted)"}}>Deletar original</span>
+            <span style={{fontSize:10,color:"var(--muted)"}}>{t("deleteOriginal")}</span>
           </label>
         </SideSection>
 
       </div>
 
-      {/* Botões de ação */}
+      {/* Action buttons */}
       <div style={{padding:12,borderTop:"1px solid var(--border)",display:"flex",flexDirection:"column",gap:6}}>
         {errorCount > 0 && !running && (
           <button className="btn" onClick={onRetry} style={{
             width:"100%",padding:"8px 0",
             background:"#ff408118",border:"1px solid var(--accent2)",
             color:"var(--accent2)",borderRadius:7,fontSize:11,fontWeight:800,letterSpacing:1.5}}>
-            ↺ RETENTAR ERROS ({errorCount})
+            {t("btnRetry")(errorCount)}
           </button>
         )}
         {!running ? (
@@ -870,14 +884,14 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
             width:"100%",padding:"11px 0",
             background:"#00e5ff18",border:"1px solid var(--accent)",
             color:"var(--accent)",borderRadius:7,fontSize:12,fontWeight:800,letterSpacing:2}}>
-            ▶ INICIAR
+            {t("btnStart")}
           </button>
         ) : (
           <button className="btn" onClick={onStop} style={{
             width:"100%",padding:"11px 0",
             background:"#ff408118",border:"1px solid var(--accent2)",
             color:"var(--accent2)",borderRadius:7,fontSize:12,fontWeight:800,letterSpacing:2}}>
-            ⏹ PARAR
+            {t("btnStop")}
           </button>
         )}
       </div>

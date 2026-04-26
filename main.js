@@ -602,9 +602,7 @@ ipcMain.handle("preview-generate", async (event, { fullPath, timestampPct, confi
         "-c:v", "hevc_nvenc",
         "-preset", preset,
         "-rc", "constqp",
-        "-cqp", String(cq),
-        "-qmin", String(cq),
-        "-qmax", String(cq),
+        "-qp", String(cq),
       );
     }
 

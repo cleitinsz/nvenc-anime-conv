@@ -58,13 +58,13 @@ function useComparison() {
       setError(e.message || "Erro desconhecido");
       setState("error");
     }
-    window.api.onPreviewProgress(onProgress);
-    window.api.onPreviewDone(onDone);
-    window.api.onPreviewError(onErr);
+    window.api.on("preview-progress", onProgress);
+    window.api.on("preview-done", onDone);
+    window.api.on("preview-error", onErr);
     return () => {
-      window.api.offPreviewProgress(onProgress);
-      window.api.offPreviewDone(onDone);
-      window.api.offPreviewError(onErr);
+      window.api.off("preview-progress");
+      window.api.off("preview-done");
+      window.api.off("preview-error");
     };
   }, []);
 
@@ -897,10 +897,13 @@ function ComparisonModal({ file, config, onClose }) {
           {/* Preview area */}
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
             {state === "idle" && (
-              <div style={{ textAlign: "center", color: "var(--muted)" }}>
-                <div style={{ fontSize: 40, opacity: 0.3 }}>🔍</div>
-                <div style={{ fontSize: 11, marginTop: 8 }}>
-                  Ajusta o timestamp e clique em "Gerar Preview"
+              <div style={{ textAlign: "center", color: "var(--text)", padding: 40 }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
+                <div style={{ fontSize: 12, marginBottom: 16 }}>
+                  Ajuste o timestamp e clique em "Gerar Preview"
+                </div>
+                <div style={{ fontSize: 10, color: "var(--muted)" }}>
+                  Timestamp: {timestamp}% ({timestampLabel})
                 </div>
               </div>
             )}
@@ -917,9 +920,15 @@ function ComparisonModal({ file, config, onClose }) {
               </div>
             )}
 
-            {state === "done" && frames && (
-              <ComparisonSlider orig={frames.orig} conv={frames.conv} viewMode={viewMode} />
-            )}
+            {state === "done" && frames ? (
+              frames.orig && frames.conv ? (
+                <ComparisonSlider orig={frames.orig} conv={frames.conv} viewMode={viewMode} />
+              ) : (
+                <div style={{ color: "var(--accent2)", textAlign: "center", fontSize: 11 }}>
+                  ✕ Frames vazios — preview失败了
+                </div>
+              )
+            ) : null}
 
             {state === "error" && (
               <div style={{ textAlign: "center", color: "var(--accent2)" }}>

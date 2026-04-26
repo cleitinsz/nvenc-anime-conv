@@ -933,12 +933,19 @@ function ComparisonModal({ file, config, onClose }) {
             {state === "error" && (
               <div style={{ textAlign: "center", color: "var(--accent2)" }}>
                 <div style={{ fontSize: 14, marginBottom: 4 }}>✕ Erro</div>
-                <div style={{ fontSize: 10, color: "var(--muted)" }}>{error}</div>
-                <button className="btn" onClick={handleGenerate} style={{
-                  marginTop: 10, padding: "6px 14px",
-                  background: "var(--accent2)22", border: "1px solid var(--accent2)",
-                  color: "var(--accent2)", borderRadius: 6, fontSize: 10,
-                }}>Tentar novamente</button>
+                <div style={{ fontSize: 10, color: "var(--muted)", maxWidth: 400, wordBreak: "break-all" }}>{error}</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                  <button className="btn" onClick={() => navigator.clipboard.writeText(error)} style={{
+                    padding: "6px 12px",
+                    background: "var(--accent2)22", border: "1px solid var(--accent2)",
+                    color: "var(--accent2)", borderRadius: 6, fontSize: 10,
+                  }}>📋 Copiar erro</button>
+                  <button className="btn" onClick={handleGenerate} style={{
+                    padding: "6px 12px",
+                    background: "var(--accent2)22", border: "1px solid var(--accent2)",
+                    color: "var(--accent2)", borderRadius: 6, fontSize: 10,
+                  }}>↺ Tentar novamente</button>
+                </div>
               </div>
             )}
           </div>

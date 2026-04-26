@@ -600,16 +600,16 @@ function ContextMenu({x,y,items,onClose}) {
   );
 }
 
-const STATUS_META = {
-  queue:     {color:"var(--yellow)", label:"FILA",   icon:"⏳"},
-  converting:{color:"var(--accent)", label:"ENCODE", icon:"⚡"},
-  done:      {color:"var(--green)",  label:"PRONTO", icon:"✓"},
-  error:     {color:"var(--accent2)",label:"ERRO",   icon:"✕"},
-  done_skip: {color:"var(--muted)",  label:"JÁ OK",  icon:"–"},
-  hevc_skip: {color:"var(--muted)",  label:"HEVC",   icon:"–"},
-};
-
 function Badge({status}) {
+  const { t } = useT();
+  const STATUS_META = {
+    queue:     {color:"var(--yellow)", label:t("statusQueue"),    icon:"⏳"},
+    converting:{color:"var(--accent)", label:t("statusEncode"),   icon:"⚡"},
+    done:      {color:"var(--green)",  label:t("statusDone"),     icon:"✓"},
+    error:     {color:"var(--accent2)",label:t("statusError"),    icon:"✕"},
+    done_skip: {color:"var(--muted)",  label:t("statusDoneSkip"), icon:"–"},
+    hevc_skip: {color:"var(--muted)",  label:t("statusHevcSkip"), icon:"–"},
+  };
   const m = STATUS_META[status]||STATUS_META.queue;
   return (
     <span style={{

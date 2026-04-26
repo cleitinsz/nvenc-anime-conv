@@ -41,6 +41,330 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
+const TRANSLATIONS = {
+  ptBR: {
+    appName: "NVENC ANIME",
+    appVersion: "H.265 CONVERTER v1.3",
+    statusConverting: "CONVERTENDO",
+    statusScanning: "ANALISANDO",
+    statusReady: "PRONTO",
+
+    sectionEncoder: "ENCODER",
+    sectionProfile: "PERFIL",
+    sectionInputFolder: "PASTA DE ENTRADA",
+    sectionOutputFolder: "PASTA DE SAÍDA",
+    sectionOutputRes: "RESOLUÇÃO DE SAÍDA",
+    sectionJobs: "JOBS PARALELOS",
+    sectionPresetCPU: "PRESET x265",
+    sectionPresetNVENC: "PRESET NVENC",
+    sectionGPU: "GPU",
+    sectionQualitySuffix: "QUALIDADE",
+    sectionOptions: "OPÇÕES",
+
+    cpuWarning: "⚠ Mais lento, comprime melhor. Use 1 job.",
+
+    profileAnimeLabel: "🎌 ANIME",
+    profileAnimeDesc: "Denoise + debanding",
+    profileLiveLabel: "🎬 LIVE ACTION",
+    profileLiveDesc: "Sem filtros, grain preservado",
+
+    outputSameLabel: "Mesma pasta",
+    outputSameDesc: "Ao lado do original",
+    outputEncodedLabel: "Subpasta /encoded",
+    outputEncodedDesc: "Criada automaticamente",
+    outputCustomLabel: "Personalizada",
+    outputCustomDesc: "Você escolhe",
+    noOutputFolder: "⚠ Nenhuma pasta selecionada",
+
+    resOriginalLabel: "Manter",
+    resOriginalDesc: "Sem downscale",
+    res1080Label: "→ 1080p",
+    res1080Desc: "~60% menor",
+    res720Label: "→ 720p",
+    res720Desc: "~80% menor",
+    resWarning: "⚠ Arquivos HEVC também serão convertidos.",
+
+    jobsNoteNVENC: "⚠ Máx. consumer NVIDIA: 3",
+    jobsNoteCPU: "⚠ CPU: recomendado 1 job",
+
+    cqHDLabel: "1080p+",
+    cqSDLabel: "720p–",
+    cqNoteNVENC: "Menor = melhor qualidade",
+    cqNoteCPU: "Menor = melhor · escala 1–51",
+
+    presetFaster: "Rápido",
+    presetFast: "Balanceado",
+    presetMedium: "Padrão",
+    presetSlow: "Melhor",
+    presetSlower: "Máximo",
+    presetNvencP4: "Rápido",
+    presetNvencP5: "Médio",
+    presetNvencP6: "Recomendado",
+    presetNvencP7: "Lento",
+
+    deleteOriginal: "Deletar original",
+
+    btnChangeFolder: "📁 TROCAR PASTA",
+    btnChooseFolder: "📂 ESCOLHER PASTA",
+    btnStart: "▶ INICIAR",
+    btnStop: "⏹ PARAR",
+    btnRetry: (n) => `↺ RETENTAR ERROS (${n})`,
+    noFolder: "Nenhuma pasta selecionada",
+
+    statusQueue: "FILA",
+    statusEncode: "ENCODE",
+    statusDone: "PRONTO",
+    statusError: "ERRO",
+    statusDoneSkip: "JÁ OK",
+    statusHevcSkip: "HEVC",
+
+    statTotal: "TOTAL",
+    statConverted: "CONVERTIDOS",
+    statEncoding: "EM ENCODE",
+    statErrors: "ERROS",
+    statSaved: "ESPAÇO SALVO",
+    statFiles: "arquivos",
+    statSlots: "slots",
+    statFreed: "liberados",
+    statConvertedSub: (n) => `de ${n}`,
+
+    tabFiles: "📋 Arquivos",
+    tabLog: "📄 Log",
+
+    filterAll: "Todos",
+    filterQueue: "Fila",
+    filterEncoding: "Encode",
+    filterDone: "Prontos",
+    filterErrors: "Erros",
+    searchPlaceholder: "Buscar arquivo...",
+    noResults: (q) => `Nenhum resultado para "${q}"`,
+    noFiles: "Nenhum arquivo",
+
+    ctxCompare: "Comparar visual",
+    ctxOpenFolder: "Abrir pasta",
+    ctxCopyPath: "Copiar caminho",
+
+    logLines: (n) => `${n} linhas`,
+    logPinned: "📌 FIXADO",
+    logPin: "FIXAR",
+    logWaiting: "Aguardando início da conversão...",
+
+    slotEta: "ETA",
+
+    scanPhaseProbe: "Lendo metadados (paralelo)...",
+    scanPhaseListing: "Listando arquivos...",
+    scanFiles: "arquivos",
+
+    emptyTitle: "Selecione uma pasta para começar",
+    emptyBtn: "📁 SELECIONAR PASTA",
+
+    modalTitle: "Comparação Visual",
+    modalTimestamp: "Timestamp:",
+    modalIdle: 'Ajuste o timestamp e clique em "Gerar Preview"',
+    modalTimestampAt: (pct, time) => `Timestamp: ${pct}% (${time})`,
+    modalProcessing: "Processando...",
+    modalEmptyFrames: "✕ Frames vazios — preview falhou",
+    modalErrorTitle: "✕ Erro",
+    modalCopyError: "📋 Copiar erro",
+    modalRetry: "↺ Tentar novamente",
+    modalGenerate: "▶ GERAR PREVIEW",
+    modalViewSingle: "Frame único",
+    modalViewFullscreen: "Tela cheia",
+    modalViewZoom: "Zoom 1:1",
+
+    toastDone: (name) => `Concluído: ${name}`,
+    toastError: (name) => `Erro: ${name}`,
+    toastSession: (n, gb) => `Sessão concluída · ${n} arquivo(s) · ${gb} GB liberados`,
+    logFolder: (p) => `Pasta: ${p}`,
+    logScanning: "Analisando arquivos (scan paralelo)...",
+    logScanResult: (total, q, skip) => `${total} arquivos — ${q} na fila | ${skip} ignorados`,
+    logSessionDone: (conv, err, gb) => `Concluído — Convertidos: ${conv} | Erros: ${err} | Ganho: ${gb} GB`,
+
+    locale: "pt-BR",
+  },
+
+  en: {
+    appName: "NVENC ANIME",
+    appVersion: "H.265 CONVERTER v1.3",
+    statusConverting: "CONVERTING",
+    statusScanning: "SCANNING",
+    statusReady: "READY",
+
+    sectionEncoder: "ENCODER",
+    sectionProfile: "PROFILE",
+    sectionInputFolder: "INPUT FOLDER",
+    sectionOutputFolder: "OUTPUT FOLDER",
+    sectionOutputRes: "OUTPUT RESOLUTION",
+    sectionJobs: "PARALLEL JOBS",
+    sectionPresetCPU: "x265 PRESET",
+    sectionPresetNVENC: "NVENC PRESET",
+    sectionGPU: "GPU",
+    sectionQualitySuffix: "QUALITY",
+    sectionOptions: "OPTIONS",
+
+    cpuWarning: "⚠ Slower, better compression. Use 1 job.",
+
+    profileAnimeLabel: "🎌 ANIME",
+    profileAnimeDesc: "Denoise + debanding",
+    profileLiveLabel: "🎬 LIVE ACTION",
+    profileLiveDesc: "No filters, grain preserved",
+
+    outputSameLabel: "Same folder",
+    outputSameDesc: "Next to original",
+    outputEncodedLabel: "Subfolder /encoded",
+    outputEncodedDesc: "Created automatically",
+    outputCustomLabel: "Custom",
+    outputCustomDesc: "You choose",
+    noOutputFolder: "⚠ No folder selected",
+
+    resOriginalLabel: "Keep",
+    resOriginalDesc: "No downscale",
+    res1080Label: "→ 1080p",
+    res1080Desc: "~60% smaller",
+    res720Label: "→ 720p",
+    res720Desc: "~80% smaller",
+    resWarning: "⚠ HEVC files will also be converted.",
+
+    jobsNoteNVENC: "⚠ Max consumer NVIDIA: 3",
+    jobsNoteCPU: "⚠ CPU: 1 job recommended",
+
+    cqHDLabel: "1080p+",
+    cqSDLabel: "720p–",
+    cqNoteNVENC: "Lower = better quality",
+    cqNoteCPU: "Lower = better · scale 1–51",
+
+    presetFaster: "Fastest",
+    presetFast: "Fast",
+    presetMedium: "Default",
+    presetSlow: "Better",
+    presetSlower: "Maximum",
+    presetNvencP4: "Fast",
+    presetNvencP5: "Medium",
+    presetNvencP6: "Recommended",
+    presetNvencP7: "Slow",
+
+    deleteOriginal: "Delete original",
+
+    btnChangeFolder: "📁 CHANGE FOLDER",
+    btnChooseFolder: "📂 CHOOSE FOLDER",
+    btnStart: "▶ START",
+    btnStop: "⏹ STOP",
+    btnRetry: (n) => `↺ RETRY ERRORS (${n})`,
+    noFolder: "No folder selected",
+
+    statusQueue: "QUEUE",
+    statusEncode: "ENCODE",
+    statusDone: "DONE",
+    statusError: "ERROR",
+    statusDoneSkip: "OK",
+    statusHevcSkip: "HEVC",
+
+    statTotal: "TOTAL",
+    statConverted: "CONVERTED",
+    statEncoding: "ENCODING",
+    statErrors: "ERRORS",
+    statSaved: "SPACE SAVED",
+    statFiles: "files",
+    statSlots: "slots",
+    statFreed: "freed",
+    statConvertedSub: (n) => `of ${n}`,
+
+    tabFiles: "📋 Files",
+    tabLog: "📄 Log",
+
+    filterAll: "All",
+    filterQueue: "Queue",
+    filterEncoding: "Encode",
+    filterDone: "Done",
+    filterErrors: "Errors",
+    searchPlaceholder: "Search file...",
+    noResults: (q) => `No results for "${q}"`,
+    noFiles: "No files",
+
+    ctxCompare: "Visual compare",
+    ctxOpenFolder: "Open folder",
+    ctxCopyPath: "Copy path",
+
+    logLines: (n) => `${n} lines`,
+    logPinned: "📌 PINNED",
+    logPin: "PIN",
+    logWaiting: "Waiting for conversion to start...",
+
+    slotEta: "ETA",
+
+    scanPhaseProbe: "Reading metadata (parallel)...",
+    scanPhaseListing: "Listing files...",
+    scanFiles: "files",
+
+    emptyTitle: "Select a folder to start",
+    emptyBtn: "📁 SELECT FOLDER",
+
+    modalTitle: "Visual Comparison",
+    modalTimestamp: "Timestamp:",
+    modalIdle: 'Adjust the timestamp and click "Generate Preview"',
+    modalTimestampAt: (pct, time) => `Timestamp: ${pct}% (${time})`,
+    modalProcessing: "Processing...",
+    modalEmptyFrames: "✕ Empty frames — preview failed",
+    modalErrorTitle: "✕ Error",
+    modalCopyError: "📋 Copy error",
+    modalRetry: "↺ Try again",
+    modalGenerate: "▶ GENERATE PREVIEW",
+    modalViewSingle: "Single frame",
+    modalViewFullscreen: "Fullscreen",
+    modalViewZoom: "Zoom 1:1",
+
+    toastDone: (name) => `Done: ${name}`,
+    toastError: (name) => `Error: ${name}`,
+    toastSession: (n, gb) => `Session done · ${n} file(s) · ${gb} GB freed`,
+    logFolder: (p) => `Folder: ${p}`,
+    logScanning: "Analyzing files (parallel scan)...",
+    logScanResult: (total, q, skip) => `${total} files — ${q} queued | ${skip} skipped`,
+    logSessionDone: (conv, err, gb) => `Done — Converted: ${conv} | Errors: ${err} | Saved: ${gb} GB`,
+
+    locale: "en-US",
+  },
+};
+
+const LanguageContext = React.createContext();
+
+function LanguageProvider({ children, lang, setLang }) {
+  const t = (key) => {
+    const val = TRANSLATIONS[lang]?.[key];
+    return val !== undefined ? val : key;
+  };
+  return (
+    <LanguageContext.Provider value={{ t, lang, setLang }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+function useT() {
+  return React.useContext(LanguageContext);
+}
+
+function LangToggle({ lang, onToggle }) {
+  const isEN = lang === "en";
+  return (
+    <button className="btn" onClick={onToggle} style={{
+      background: "transparent",
+      border: "1px solid var(--border)",
+      color: "var(--muted)",
+      borderRadius: 5,
+      padding: "3px 8px",
+      fontSize: 10,
+      fontWeight: 700,
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      letterSpacing: 0.5,
+    }}>
+      <span style={{ fontSize: 13 }}>{isEN ? "🇺🇸" : "🇧🇷"}</span>
+      <span>{isEN ? "EN" : "PT-BR"}</span>
+    </button>
+  );
+}
+
 // ── Comparison hook ──────────────────────────────────────────
 function useComparison() {
   const [state, setState]   = useState("idle"); // idle | generating | done | error

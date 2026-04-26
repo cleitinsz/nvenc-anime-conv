@@ -49,8 +49,8 @@ function buildArgsGPU(item, config) {
 
   // -hwaccel cuda só é compatível sem filtros de CPU (scale, hqdn3d, etc.)
   const args = ["-y"];
-  if (!vf) args.push("-hwaccel", "cuda");
-  args.push("-i", item.fullPath, "-map", "0:V", "-map", "0:a:0", "-map", "0:s?");
+  if (!vf) args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
+  args.push("-i", item.fullPath, "-map", "0:v:0", "-map", "0:a:0", "-map", "0:s?");
 
   if (vf) args.push("-vf", vf);
 
@@ -61,8 +61,10 @@ function buildArgsGPU(item, config) {
     "-rc",     "vbr",
     "-cq",     String(cq), "-b:v", "0",
     "-spatial-aq", "1", "-aq-strength", prof.aqStrength,
+    "-rc-lookahead", "10",
     "-profile:v", "main10", "-pix_fmt", "p010le",
     "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
+    "-vsync", "0",
     "-progress", item.progressFile,
     item.saida,
   );
@@ -84,7 +86,7 @@ function buildArgsCPU(item, config) {
   const args = [
     "-y",
     "-i", item.fullPath,
-    "-map", "0:V", "-map", "0:a:0", "-map", "0:s?",
+    "-map", "0:v:0", "-map", "0:a:0", "-map", "0:s?",
   ];
 
   if (vf) args.push("-vf", vf);

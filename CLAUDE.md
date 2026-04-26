@@ -37,7 +37,7 @@ A lógica de negócio foi extraída de `main.js` para módulos em `src/utils/` p
 
 | Módulo | Conteúdo |
 |---|---|
-| `src/utils/ffmpegArgs.js` | `buildArgs`, `buildArgsGPU`, `buildArgsCPU`, `buildVF` — monta os argumentos CLI do ffmpeg. Recebe `config` como parâmetro explícito (não fecha sobre variável de módulo). |
+| `src/utils/ffmpegArgs.js` | `buildArgs`, `buildArgsGPU`, `buildArgsCPU`, `buildVF`, `PROFILE_ENCODE`, `SCALE_FILTER` — monta os argumentos CLI do ffmpeg. Recebe `config` como parâmetro explícito. |
 | `src/utils/formatters.js` | `fmtBitrate` (formata kbps/Mbps), `runParallel` (pool async com concorrência limitada) |
 | `src/utils/progressParser.js` | `parseProgressFile` — lê o arquivo de progresso do ffmpeg. Aceita `fsModule` como parâmetro opcional para injeção em testes. |
 
@@ -61,6 +61,25 @@ main.js → renderer (eventos push):
 `main.js` mantém um pool de até 3 slots (`slots = {}`). Cada slot roda um processo `ffmpeg` filho. O ciclo é: `fillSlots()` → `startSlot()` → processo ffmpeg → `finishSlot()` → `fillSlots()`.
 
 Um `setInterval` de 800ms (`pollProgress`) lê o arquivo de progresso temporário de cada slot (gerado via `-progress <file>` no ffmpeg) e envia atualizações ao renderer.
+
+**Argumentos GPU (`buildArgsGPU`):**
+- `-hwaccel cuda -hwaccel_output_format cuda` (só quando sem filtros)
+- `-map 0:v:0 -map 0:a:0 -map 0:s?`
+- `-rc-lookahead 10`, `-vsync 0`
+
+**Argumentos CPU (`buildArgsCPU`):**
+- `-map 0:v:0 -map 0:a:0 -map 0:s?`
+
+### Perfis de encode
+
+`PROFILE_ENCODE` em `ffmpegArgs.js` define dois perfis:
+
+| Perfil | Filtros | AQ (NVENC) | x265-params |
+|---|---|---|---|
+| `anime` | `hqdn3d=1.2:1.2:5:5,gradfun` | 8 | `aq-mode=3:aq-strength=0.8:deblock=-1,-1` |
+| `liveaction` | nenhum | 10 | `aq-mode=2:aq-strength=1.0` |
+
+O perfil é selecionado em `config.profile` e fallback é `anime`.
 
 ### Config persistida
 

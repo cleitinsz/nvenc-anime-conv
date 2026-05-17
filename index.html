@@ -754,8 +754,8 @@ function SideSection({title,children,defaultOpen=true}) {
 
 // ── Settings panel ───────────────────────────────────────────
 
-function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart,onStop,onRetry,running,scanning,folder,outputFolder,totalQueue,errorCount}) {
-  const { t } = useT();
+function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart,onStop,onRetry,running,scanning,folder,outputFolder,totalQueue,errorCount,activePreset,getPresetName,onClickPresetBadge}) {
+  const { t, lang } = useT();
 
   function set(k,v){onChange({...cfg,[k]:v});}
 
@@ -814,6 +814,21 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
       <div style={{padding:"14px 16px 10px",borderBottom:"1px solid var(--border)"}}>
         <div style={{fontSize:11,fontWeight:800,color:"var(--accent)",letterSpacing:3}}>{t("appName")}</div>
         <div style={{fontSize:9,color:"var(--muted)",letterSpacing:1.5}}>{t("appVersion")}</div>
+      </div>
+
+      {/* Preset ativo */}
+      <div style={{padding:"9px 12px",borderBottom:"1px solid var(--border)",
+                   display:"flex",alignItems:"center",gap:6,fontSize:11,
+                   color:"var(--muted)",cursor:activePreset?"pointer":"default"}}
+           onClick={onClickPresetBadge}>
+        <span>🎛 Preset:</span>
+        {activePreset ? (
+          <span style={{color:"var(--accent)",fontWeight:600}}>
+            {activePreset.icon} {getPresetName(activePreset)}
+          </span>
+        ) : (
+          <span style={{fontStyle:"italic"}}>{t("presetCustom")}</span>
+        )}
       </div>
 
       <div style={{flex:1,overflowY:"auto",padding:"4px 14px 14px",display:"flex",flexDirection:"column",gap:0}}>
@@ -1486,6 +1501,8 @@ function App() {
   const [filter,    setFilter]   = useState("all");
   const [toasts,    setToasts]   = useState([]);
   const [previewFile, setPreviewFile] = useState(null);
+  const [builtinPresets, setBuiltinPresets] = useState([]);
+  const [activePresetId, setActivePresetId] = useState(null);
 
   const totalConversoes = files.filter(f=>!["done_skip","hevc_skip"].includes(f.status)).length;
   const totalQueue      = files.filter(f=>f.status==="queue").length;
@@ -1517,8 +1534,11 @@ function App() {
 
   // IPC listeners
   useEffect(()=>{
-    window.api.on("config-loaded", (c)=>{
-      setCfg(prev=>({...prev,...c}));
+    window.api.on("config-loaded", (payload) => {
+      const { _builtinPresets, _activePresetId, ...c } = payload;
+      setCfg(prev => ({...prev, ...c}));
+      setBuiltinPresets(_builtinPresets || []);
+      setActivePresetId(_activePresetId || null);
       if (c.lastFolder)   setFolder(c.lastFolder);
       if (c.outputFolder) setOutputFolder(c.outputFolder);
       if (c.lang)         setLang(c.lang);
@@ -1603,6 +1623,21 @@ async function handleSelectFolder() {
   const donePct   = totalConversoes>0 ? Math.round(stats.done/totalConversoes*100) : 0;
   const horarioFim = running ? etaHorario(stats.globalEta) : null;
 
+  const allPresets = useMemo(
+    () => [...builtinPresets, ...(cfg.customPresets || [])],
+    [builtinPresets, cfg.customPresets]
+  );
+  const activePreset = useMemo(
+    () => activePresetId ? allPresets.find(p => p.id === activePresetId) : null,
+    [activePresetId, allPresets]
+  );
+
+  function getPresetName(p) {
+    if (!p) return null;
+    if (typeof p.name === "string") return p.name;
+    return p.name?.[lang] || p.name?.ptBR || p.name?.en || "?";
+  }
+
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100vh",overflow:"hidden"}}>
 
@@ -1653,6 +1688,7 @@ async function handleSelectFolder() {
           onSelectOutputFolder={handleSelectOutputFolder}
           running={running} scanning={scanning}
           folder={folder} outputFolder={outputFolder} totalQueue={totalQueue} errorCount={errorFiles.length}
+          activePreset={activePreset} getPresetName={getPresetName} onClickPresetBadge={()=>setTab("presets")}
         />
 
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>

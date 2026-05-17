@@ -1686,6 +1686,10 @@ function App() {
   const [savePresetModal, setSavePresetModal] = useState(null);
   const [editPresetModal, setEditPresetModal] = useState(null);
 
+  // Quebra o ciclo config-loaded → setCfg → useEffect → setConfig → emitConfigLoaded → ...
+  // Quando server manda config-loaded, marca essa flag pra próximo useEffect[cfg] skipar o echo back.
+  const skipNextSetConfig = useRef(false);
+
   const totalConversoes = files.filter(f=>!["done_skip","hevc_skip"].includes(f.status)).length;
   const totalQueue      = files.filter(f=>f.status==="queue").length;
   const errorFiles      = files.filter(f=>f.status==="error");
@@ -1718,6 +1722,7 @@ function App() {
   useEffect(()=>{
     window.api.on("config-loaded", (payload) => {
       const { _builtinPresets, _activePresetId, ...c } = payload;
+      skipNextSetConfig.current = true;
       setCfg(prev => ({...prev, ...c}));
       setBuiltinPresets(_builtinPresets || []);
       setActivePresetId(_activePresetId || null);
@@ -1753,7 +1758,13 @@ function App() {
     };
   },[addLog,updateFile]);
 
-  useEffect(()=>{ window.api.setConfig(cfg); },[cfg]);
+  useEffect(() => {
+    if (skipNextSetConfig.current) {
+      skipNextSetConfig.current = false;
+      return;
+    }
+    window.api.setConfig(cfg);
+  }, [cfg]);
   useEffect(()=>{ window.api.setConfig({...cfg, lang}); },[lang]);
 
 function handleOpenSaveModal() {

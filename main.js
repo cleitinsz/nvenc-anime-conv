@@ -317,6 +317,18 @@ ipcMain.on("set-config", (_, newCfg) => {
 
 ipcMain.handle("get-config", () => config);
 
+ipcMain.handle("apply-preset", (_, presetId) => {
+  const all = [...BUILTIN_PRESETS, ...(config.customPresets || [])];
+  const preset = all.find(p => p.id === presetId);
+  if (!preset) return { ok: false, reason: "not_found" };
+  if (running) return { ok: false, reason: "converting" };
+  config = applyPreset(preset, config);
+  L = LOG_STRINGS[config.lang] || LOG_STRINGS.ptBR;
+  saveConfig(config);
+  emitConfigLoaded();
+  return { ok: true };
+});
+
 // ============================================================
 //  JOB POOL
 // ============================================================

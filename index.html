@@ -1725,6 +1725,17 @@ function handleOpenSaveModal() {
     }
   }
 
+  async function handleDeletePreset(preset) {
+    if (preset.builtin) {
+      addToast(t("presetCannotDeleteBuiltin"), "✕", "var(--accent2)");
+      return;
+    }
+    const name = typeof preset.name === "string" ? preset.name : (preset.name?.[lang] || "?");
+    if (!window.confirm(t("presetDeleteConfirm")(name))) return;
+    const r = await window.api.deletePreset(preset.id);
+    if (r?.ok) addToast(t("presetDeleteSuccess")(name), "✓", "var(--green)");
+  }
+
   async function handleSelectFolder() {
     const p = await window.api.selectFolder();
     if (!p) return;
@@ -1905,7 +1916,7 @@ function handleOpenSaveModal() {
                     {builtinPresets.map(p => (
                       <PresetCard key={p.id} preset={p} isActive={p.id===activePresetId}
                                   lang={lang} t={t}
-                                  onApply={handleApplyPreset} onEdit={()=>{}} onDelete={()=>{}}/>
+                                  onApply={handleApplyPreset} onEdit={()=>{}} onDelete={handleDeletePreset}/>
                     ))}
                   </div>
 
@@ -1925,7 +1936,7 @@ function handleOpenSaveModal() {
                     {(cfg.customPresets || []).map(p => (
                       <PresetCard key={p.id} preset={p} isActive={p.id===activePresetId}
                                   lang={lang} t={t}
-                                  onApply={handleApplyPreset} onEdit={()=>{}} onDelete={()=>{}}/>
+                                  onApply={handleApplyPreset} onEdit={()=>{}} onDelete={handleDeletePreset}/>
                     ))}
                     {(!cfg.customPresets || cfg.customPresets.length===0) && (
                       <div style={{color:"var(--muted)",fontSize:11,fontStyle:"italic",padding:"12px 0"}}>

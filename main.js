@@ -76,6 +76,7 @@ function loadConfig() {
     cpuPreset: "medium",
     outputRes: "original",
     lang: "ptBR",
+    customPresets: [],
   };
   try {
     return { ...defaults, ...JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) };

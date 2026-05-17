@@ -1534,6 +1534,64 @@ function SavePresetModal({ snapshot, lang, t, onCancel, onSave }) {
   );
 }
 
+function EditPresetModal({ preset, lang, t, onCancel, onSave }) {
+  const initialName = typeof preset.name === "string" ? preset.name : (preset.name?.[lang] || "");
+  const initialDesc = typeof preset.description === "string" ? preset.description : (preset.description?.[lang] || "");
+  const [name, setName]        = useState(initialName);
+  const [icon, setIcon]        = useState(preset.icon || "⭐");
+  const [description, setDesc] = useState(initialDesc);
+  const [error, setError]      = useState("");
+
+  function handleSave() {
+    if (!name.trim()) { setError(t("presetNameRequired")); return; }
+    onSave({ name: name.trim(), icon: icon || "⭐", description });
+  }
+
+  const inputStyle = {
+    width:"100%",padding:"7px 9px",background:"#0a0e14",color:"var(--text)",
+    border:"1px solid var(--border2)",borderRadius:5,fontFamily:"var(--mono)",fontSize:12
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"#000c",zIndex:500,
+                 display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"var(--panel)",border:"1px solid var(--border2)",borderRadius:10,
+                   padding:"20px 24px",minWidth:380,maxWidth:480}}>
+        <h2 style={{fontSize:14,color:"var(--accent)",marginBottom:14,letterSpacing:1}}>
+          {t("presetEditModalTitle")}
+        </h2>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div>
+            <label style={{fontSize:10,color:"var(--muted)",letterSpacing:1}}>{t("presetSaveName")}</label>
+            <input style={inputStyle} value={name} onChange={(e)=>setName(e.target.value)} maxLength={40} autoFocus/>
+          </div>
+          <div>
+            <label style={{fontSize:10,color:"var(--muted)",letterSpacing:1}}>{t("presetSaveIcon")}</label>
+            <input style={inputStyle} value={icon} onChange={(e)=>setIcon(e.target.value)} maxLength={4}/>
+          </div>
+          <div>
+            <label style={{fontSize:10,color:"var(--muted)",letterSpacing:1}}>{t("presetSaveDescription")}</label>
+            <input style={inputStyle} value={description} onChange={(e)=>setDesc(e.target.value)} maxLength={120}/>
+          </div>
+          {error && <div style={{color:"var(--accent2)",fontSize:11}}>{error}</div>}
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+          <button className="btn" onClick={onCancel}
+                  style={{padding:"7px 14px",fontSize:11,background:"transparent",
+                          color:"var(--muted)",border:"1px solid var(--border2)",borderRadius:5}}>
+            {t("btnPresetCancel")}
+          </button>
+          <button className="btn" onClick={handleSave}
+                  style={{padding:"7px 14px",fontSize:11,fontWeight:700,
+                          background:"var(--accent)",color:"#000",border:"none",borderRadius:5}}>
+            {t("btnPresetSave")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PresetCard({ preset, isActive, lang, onApply, onEdit, onDelete, t }) {
   const name = typeof preset.name === "string" ? preset.name
              : (preset.name?.[lang] || preset.name?.ptBR || preset.name?.en || "?");
@@ -1625,6 +1683,7 @@ function App() {
   const [builtinPresets, setBuiltinPresets] = useState([]);
   const [activePresetId, setActivePresetId] = useState(null);
   const [savePresetModal, setSavePresetModal] = useState(null);
+  const [editPresetModal, setEditPresetModal] = useState(null);
 
   const totalConversoes = files.filter(f=>!["done_skip","hevc_skip"].includes(f.status)).length;
   const totalQueue      = files.filter(f=>f.status==="queue").length;
@@ -1734,6 +1793,15 @@ function handleOpenSaveModal() {
     if (!window.confirm(t("presetDeleteConfirm")(name))) return;
     const r = await window.api.deletePreset(preset.id);
     if (r?.ok) addToast(t("presetDeleteSuccess")(name), "✓", "var(--green)");
+  }
+
+  async function handleEditPreset({ name, icon, description }) {
+    const target = editPresetModal;
+    await window.api.applyPreset(target.id);
+    await window.api.deletePreset(target.id);
+    await window.api.savePresetFromConfig(name, icon, description);
+    addToast(t("presetSaveSuccess")(name), "✓", "var(--green)");
+    setEditPresetModal(null);
   }
 
   async function handleSelectFolder() {
@@ -1936,7 +2004,7 @@ function handleOpenSaveModal() {
                     {(cfg.customPresets || []).map(p => (
                       <PresetCard key={p.id} preset={p} isActive={p.id===activePresetId}
                                   lang={lang} t={t}
-                                  onApply={handleApplyPreset} onEdit={()=>{}} onDelete={handleDeletePreset}/>
+                                  onApply={handleApplyPreset} onEdit={(p)=>setEditPresetModal(p)} onDelete={handleDeletePreset}/>
                     ))}
                     {(!cfg.customPresets || cfg.customPresets.length===0) && (
                       <div style={{color:"var(--muted)",fontSize:11,fontStyle:"italic",padding:"12px 0"}}>
@@ -1965,6 +2033,12 @@ function handleOpenSaveModal() {
         <SavePresetModal snapshot={savePresetModal.snapshot} lang={lang} t={t}
                          onCancel={()=>setSavePresetModal(null)}
                          onSave={handleSavePreset}/>
+      )}
+
+      {editPresetModal && (
+        <EditPresetModal preset={editPresetModal} lang={lang} t={t}
+                         onCancel={()=>setEditPresetModal(null)}
+                         onSave={handleEditPreset}/>
       )}
     </div>
   );

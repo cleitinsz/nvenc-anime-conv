@@ -108,4 +108,27 @@ describe("postProcess", () => {
     expect(result.verdict).toBe("quarantine");
     expect(result.reason).toBe("zero_bitrate");
   });
+
+  test("quarentena cria diretório '_quarantine' com recursive: true", async () => {
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 400_000_000 } });
+    const probe = jest.fn(async () => ({ codec: "hevc", height: 0, duracao: 1200, bitrate: 0 }));
+    await postProcess({
+      item: baseItem, exitCode: 0, stderr: "",
+      probe, fs, path: mockPath,
+    });
+    expect(fs.mkdirSync).toHaveBeenCalledWith("/src/encoded/_quarantine", { recursive: true });
+  });
+
+  test("quarentena move o arquivo via renameSync", async () => {
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 400_000_000 } });
+    const probe = jest.fn(async () => ({ codec: "hevc", height: 0, duracao: 1200, bitrate: 0 }));
+    await postProcess({
+      item: baseItem, exitCode: 0, stderr: "",
+      probe, fs, path: mockPath,
+    });
+    expect(fs.renameSync).toHaveBeenCalledWith(
+      "/src/encoded/anime_hevc.mkv",
+      "/src/encoded/_quarantine/anime_hevc.mkv"
+    );
+  });
 });

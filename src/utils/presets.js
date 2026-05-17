@@ -107,4 +107,17 @@ function generateCustomId() {
   return `custom:${block(8)}-${block(4)}-4${block(3)}-${block(4)}-${block(12)}`;
 }
 
-module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset, isPresetActive, findActivePreset, generateCustomId };
+function getLocaleField(preset, field, lang) {
+  const v = preset[field];
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    if (v[lang]) return v[lang];
+    if (v.ptBR)  return v.ptBR;
+    if (v.en)    return v.en;
+    const firstKey = Object.keys(v)[0];
+    if (firstKey) return v[firstKey];
+  }
+  return "";
+}
+
+module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset, isPresetActive, findActivePreset, generateCustomId, getLocaleField };

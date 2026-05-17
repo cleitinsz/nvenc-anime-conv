@@ -127,3 +127,32 @@ describe("generateCustomId", () => {
     expect(generateCustomId()).toMatch(/^custom:/);
   });
 });
+
+const { getLocaleField } = require("../src/utils/presets");
+
+describe("getLocaleField", () => {
+  test("retorna string como veio quando preset[field] é string", () => {
+    const p = { name: "Meu preset", builtin: false };
+    expect(getLocaleField(p, "name", "ptBR")).toBe("Meu preset");
+  });
+
+  test("resolve objeto localizado pela lang", () => {
+    const p = { name: { ptBR: "Olá", en: "Hi" }, builtin: true };
+    expect(getLocaleField(p, "name", "en")).toBe("Hi");
+  });
+
+  test("fallback: lang ausente → tenta ptBR", () => {
+    const p = { name: { ptBR: "Olá", en: "Hi" }, builtin: true };
+    expect(getLocaleField(p, "name", "jp")).toBe("Olá");
+  });
+
+  test("fallback: ptBR ausente → tenta en", () => {
+    const p = { name: { en: "Hi" }, builtin: true };
+    expect(getLocaleField(p, "name", "jp")).toBe("Hi");
+  });
+
+  test("fallback final: nenhuma chave conhecida → primeira chave do objeto", () => {
+    const p = { name: { ja: "やあ" }, builtin: true };
+    expect(getLocaleField(p, "name", "jp")).toBe("やあ");
+  });
+});

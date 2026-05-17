@@ -22,6 +22,7 @@ const { fmtBitrate, runParallel }   = require("./src/utils/formatters");
 const { parseProgressFile }         = require("./src/utils/progressParser");
 const { buildArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/utils/ffmpegArgs");
 const { postProcess }               = require("./src/utils/postProcess");
+const { BUILTIN_PRESETS, PRESET_FIELDS, findActivePreset, applyPreset, generateCustomId } = require("./src/utils/presets");
 
 // ============================================================
 //  CONFIG PERSISTIDA  [FEAT]
@@ -95,6 +96,16 @@ function saveConfig(cfg) {
 let config = loadConfig();
 L = LOG_STRINGS[config.lang] || LOG_STRINGS.ptBR;
 
+function emitConfigLoaded() {
+  const all    = [...BUILTIN_PRESETS, ...(config.customPresets || [])];
+  const active = findActivePreset(config, all);
+  mainWindow?.webContents.send("config-loaded", {
+    ...config,
+    _builtinPresets: BUILTIN_PRESETS,
+    _activePresetId: active?.id || null,
+  });
+}
+
 // ============================================================
 //  JANELA
 // ============================================================
@@ -115,7 +126,7 @@ app.whenReady().then(() => {
   });
   mainWindow.loadFile("index.html");
   mainWindow.webContents.on("did-finish-load", () => {
-    mainWindow.webContents.send("config-loaded", config);
+    emitConfigLoaded();
   });
 });
 
@@ -301,6 +312,7 @@ ipcMain.on("set-config", (_, newCfg) => {
   config = { ...config, ...newCfg };
   L = LOG_STRINGS[config.lang] || LOG_STRINGS.ptBR;
   saveConfig(config);
+  emitConfigLoaded();
 });
 
 ipcMain.handle("get-config", () => config);

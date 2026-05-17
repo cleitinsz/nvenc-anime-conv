@@ -357,57 +357,31 @@ function startSlot(slotId, item) {
   proc.on("close", code => { if (running || code === 0) finishSlot(slotId, code); });
 }
 
-function finishSlot(slotId, code) {
+async function finishSlot(slotId, code) {
   const slot = slots[slotId];
   if (!slot) return;
 
   const { item } = slot;
-  const durConv  = ((Date.now() - slot.inicio) / 60000).toFixed(1);
-
   try { fs.unlinkSync(slot.progressFile); } catch {}
   mainWindow?.webContents.send("slot-clear", { slotId });
 
-  if (code === 0 && fs.existsSync(item.saida)) {
-    const sizeAfter = fs.statSync(item.saida).size;
-    if (sizeAfter < 100 * 1024) {
-      log("ERRO", L.slotSuspect(slotId, Math.round(sizeAfter/1024), item.name));
-      try { fs.unlinkSync(item.saida); } catch {}
-      errorCount++;
-      mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "error" });
-    } else {
-      const reducao = Math.round((item.size - sizeAfter) * 100 / item.size);
-      const mb1 = (item.size   / 1048576).toFixed(1);
-      const mb2 = (sizeAfter  / 1048576).toFixed(1);
-      statsAntes  += item.size;
-      statsDepois += sizeAfter;
-      doneCount++;
-      log("OK", L.slotDone(slotId, item.name, mb1, mb2, reducao, durConv));
-      mainWindow?.webContents.send("file-status", {
-        fullPath: item.fullPath, status: "done",
-        mb1: parseFloat(mb1), mb2: parseFloat(mb2), reducao,
-      });
-      if (config.deletarOriginal) {
-        try { fs.unlinkSync(item.fullPath); } catch {}
-        log("INFO", L.slotDeleted(slotId, item.name));
-      }
-    }
-  } else {
-    // Extrai até 5 linhas de erro do stderr para diagnóstico
-    const stderrLines = slot.getStderr().split("\n").map(l => l.trim()).filter(Boolean);
-    const errorLines  = stderrLines
-      .filter(l => /error|invalid|failed|cannot|unsupported|unknown/i.test(l))
-      .slice(-5);
-    const lastError   = errorLines.pop() || stderrLines.slice(-2).join(" | ") || "sem mensagem";
+  const result = await postProcess({
+    item,
+    exitCode: code,
+    stderr:   slot.getStderr(),
+    probe:    ffprobeAll,
+    fs,
+    path,
+  });
 
-    log("ERRO", L.slotFailed(slotId, item.name, code));
-    log("ERRO", L.slotCause(lastError));
+  const durConv = ((Date.now() - slot.inicio) / 60000).toFixed(1);
 
-    // Loga linhas adicionais de contexto se houver mais de uma linha de erro
-    for (const l of errorLines) {
-      log("DEBUG", `  > ${l}`);
-    }
-    errorCount++;
-    mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "error" });
+  switch (result.verdict) {
+    case "ok":         handleOk(slotId, slot, durConv); break;
+    case "no_gain":    handleNoGain(slotId, slot); break;
+    case "quarantine": handleQuarantine(slotId, slot, result); break;
+    case "retry":      handleRetry(slotId, slot, result); break;
+    case "error":      handleError(slotId, slot, result); break;
   }
 
   delete slots[slotId];
@@ -415,6 +389,72 @@ function finishSlot(slotId, code) {
   fillSlots();
 
   if (queue.length === 0 && Object.keys(slots).length === 0) finishSession();
+}
+
+function handleOk(slotId, slot, durConv) {
+  const { item } = slot;
+  const sizeAfter = fs.statSync(item.saida).size;
+  const reducao   = Math.round((item.size - sizeAfter) * 100 / item.size);
+  const mb1 = (item.size  / 1048576).toFixed(1);
+  const mb2 = (sizeAfter / 1048576).toFixed(1);
+  statsAntes  += item.size;
+  statsDepois += sizeAfter;
+  doneCount++;
+  log("OK", L.slotDone(slotId, item.name, mb1, mb2, reducao, durConv));
+  mainWindow?.webContents.send("file-status", {
+    fullPath: item.fullPath, status: "done",
+    mb1: parseFloat(mb1), mb2: parseFloat(mb2), reducao,
+  });
+  if (config.deletarOriginal) {
+    try { fs.unlinkSync(item.fullPath); } catch {}
+    log("INFO", L.slotDeleted(slotId, item.name));
+  }
+}
+
+function handleNoGain(slotId, slot) {
+  const { item } = slot;
+  noGainCount++;
+  const mbOrig = (item.size / 1048576).toFixed(1);
+  log("AVISO", L.slotNoGain(slotId, item.name, mbOrig));
+  mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "no_gain" });
+}
+
+function handleQuarantine(slotId, slot, result) {
+  const { item } = slot;
+  quarantineCount++;
+  if (!quarantineFirstPath) quarantineFirstPath = result.quarantinePath;
+  log("ERRO", L.slotQuarantine(slotId, item.name, result.reason));
+  mainWindow?.webContents.send("file-status", {
+    fullPath: item.fullPath, status: "quarantine",
+    quarantinePath: result.quarantinePath, reason: result.reason,
+  });
+}
+
+function handleRetry(slotId, slot, result) {
+  const { item } = slot;
+  retryCount++;
+  item.attempts = (item.attempts || 0) + 1;
+  log("AVISO", L.slotRetry(slotId, item.name, result.reason));
+  mainWindow?.webContents.send("file-status", {
+    fullPath: item.fullPath, status: "queue", progress: 0,
+  });
+  queue.unshift(item);
+}
+
+function handleError(slotId, slot, result) {
+  const { item } = slot;
+  const stderr = slot.getStderr();
+  const stderrLines = stderr.split("\n").map(l => l.trim()).filter(Boolean);
+  const errorLines  = stderrLines
+    .filter(l => /error|invalid|failed|cannot|unsupported|unknown/i.test(l))
+    .slice(-5);
+  const lastError = errorLines.pop() || stderrLines.slice(-2).join(" | ") || "sem mensagem";
+
+  errorCount++;
+  log("ERRO", L.slotFailed(slotId, item.name, "n/a"));
+  log("ERRO", L.slotCause(`${result.reason} | ${lastError}`));
+  for (const l of errorLines) log("DEBUG", `  > ${l}`);
+  mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "error" });
 }
 
 function finishSession() {

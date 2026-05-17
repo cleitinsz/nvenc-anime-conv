@@ -347,6 +347,14 @@ ipcMain.handle("save-preset-from-config", (_, { name, icon, description }) => {
   return { ok: true, preset: newPreset };
 });
 
+ipcMain.handle("delete-preset", (_, presetId) => {
+  if (presetId.startsWith("builtin:")) return { ok: false, reason: "is_builtin" };
+  config.customPresets = (config.customPresets || []).filter(p => p.id !== presetId);
+  saveConfig(config);
+  emitConfigLoaded();
+  return { ok: true };
+});
+
 // ============================================================
 //  JOB POOL
 // ============================================================

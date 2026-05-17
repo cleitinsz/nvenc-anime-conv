@@ -131,4 +131,40 @@ describe("postProcess", () => {
       "/src/encoded/_quarantine/anime_hevc.mkv"
     );
   });
+
+  test("verdict 'retry' quando stderr é transient e attempts=0", async () => {
+    const fs = makeMockFs();
+    const result = await postProcess({
+      item: baseItem,
+      exitCode: 1,
+      stderr: "[hevc_nvenc] OpenEncodeSessionEx failed: out of memory (10)",
+      probe: okProbe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("retry");
+    expect(result.retryable).toBe(true);
+    expect(result.reason).toMatch(/^transient:/);
+  });
+
+  test("verdict 'error' quando stderr é transient mas attempts>=1", async () => {
+    const fs = makeMockFs();
+    const item = { ...baseItem, attempts: 1 };
+    const result = await postProcess({
+      item, exitCode: 1, stderr: "Cannot allocate memory",
+      probe: okProbe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("error");
+    expect(result.reason).toMatch(/^transient_after_retry:/);
+  });
+
+  test("verdict 'error' com reason 'unknown:<última linha não-vazia>' em stderr aleatório", async () => {
+    const fs = makeMockFs();
+    const result = await postProcess({
+      item: baseItem,
+      exitCode: 1,
+      stderr: "ffmpeg version 6.0\n\nSome random thing happened\n",
+      probe: okProbe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("error");
+    expect(result.reason).toBe("unknown:Some random thing happened");
+  });
 });

@@ -12,6 +12,28 @@
  * @returns {Promise<{verdict, reason, retryable?, suppressDelete?, quarantinePath?}>}
  */
 
+const TRANSIENT_PATTERNS = [
+  /cannot allocate memory/i,
+  /out of memory/i,
+  /CUDA.*out of memory/i,
+  /OpenEncodeSessionEx failed/i,          // driver hang típico NVENC
+  /No NVENC capable devices found/i,      // race com GPU inicializando
+  /Device or resource busy/i,
+  /Operation not permitted.*nvenc/i,
+];
+
+function classifyError(stderr, attempts) {
+  const match = TRANSIENT_PATTERNS.find(re => re.test(stderr));
+  if (match) {
+    if ((attempts || 0) < 1) {
+      return { verdict: "retry", reason: `transient:${match.source}`, retryable: true };
+    }
+    return { verdict: "error", reason: `transient_after_retry:${match.source}` };
+  }
+  const lastLine = stderr.split("\n").map(l => l.trim()).filter(Boolean).pop() || "no_message";
+  return { verdict: "error", reason: `unknown:${lastLine}` };
+}
+
 function quarantine(item, reason, fs, path) {
   const outDir        = path.dirname(item.saida);
   const quarantineDir = path.join(outDir, "_quarantine");
@@ -47,7 +69,7 @@ async function postProcess({ item, exitCode, stderr, probe, fs, path }) {
 
     return { verdict: "ok", reason: "encode_succeeded" };
   }
-  return { verdict: "error", reason: "exit_non_zero" };
+  return classifyError(stderr, item.attempts);
 }
 
 module.exports = { postProcess };

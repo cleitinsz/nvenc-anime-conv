@@ -223,7 +223,10 @@ ipcMain.handle("scan-folder", async (_, folderPath) => {
     catch { return; }
     for (const e of entries) {
       const full = path.join(dir, e.name);
-      if (e.isDirectory()) { walk(full); continue; }
+      if (e.isDirectory()) {
+        if (e.name === "_quarantine") continue;  // pular pasta de quarentena
+        walk(full); continue;
+      }
       if (!e.isFile()) continue;
       const ext  = path.extname(e.name).slice(1).toLowerCase();
       const base = path.basename(e.name, "." + ext);

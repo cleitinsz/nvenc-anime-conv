@@ -39,4 +39,26 @@ describe("postProcess", () => {
     });
     expect(result.verdict).toBe("ok");
   });
+
+  test("verdict 'no_gain' quando output >= source size", async () => {
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 1_100_000_000 } });
+    const result = await postProcess({
+      item: baseItem, exitCode: 0, stderr: "",
+      probe: okProbe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("no_gain");
+    expect(result.reason).toBe("output_>=_source");
+    expect(result.suppressDelete).toBe(true);
+    expect(fs.unlinkSync).toHaveBeenCalledWith("/src/encoded/anime_hevc.mkv");
+  });
+
+  test("'no_gain' curto-circuita probe (não chama ffprobe)", async () => {
+    const probeMock = jest.fn();
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 1_500_000_000 } });
+    await postProcess({
+      item: baseItem, exitCode: 0, stderr: "",
+      probe: probeMock, fs, path: mockPath,
+    });
+    expect(probeMock).not.toHaveBeenCalled();
+  });
 });

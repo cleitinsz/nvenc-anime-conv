@@ -13,6 +13,11 @@
  */
 async function postProcess({ item, exitCode, stderr, probe, fs, path }) {
   if (exitCode === 0) {
+    const outSize = fs.statSync(item.saida).size;
+    if (outSize >= item.size) {
+      fs.unlinkSync(item.saida);
+      return { verdict: "no_gain", reason: "output_>=_source", suppressDelete: true };
+    }
     return { verdict: "ok", reason: "encode_succeeded" };
   }
   return { verdict: "error", reason: "exit_non_zero" };

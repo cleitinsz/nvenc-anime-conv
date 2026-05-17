@@ -1630,7 +1630,20 @@ function App() {
   useEffect(()=>{ window.api.setConfig(cfg); },[cfg]);
   useEffect(()=>{ window.api.setConfig({...cfg, lang}); },[lang]);
 
-async function handleSelectFolder() {
+async function handleApplyPreset(preset) {
+    if (running) {
+      addToast(t("presetApplyWhileConverting"), "⏸", "var(--yellow)");
+      return;
+    }
+    const r = await window.api.applyPreset(preset.id);
+    if (r?.ok) {
+      const name = typeof preset.name === "string" ? preset.name
+                 : (preset.name?.[lang] || preset.name?.ptBR || "");
+      addToast(t("presetApplySuccess")(name), "✓", "var(--green)");
+    }
+  }
+
+  async function handleSelectFolder() {
     const p = await window.api.selectFolder();
     if (!p) return;
     setFolder(p); setFiles([]); setLogs([]);
@@ -1810,7 +1823,7 @@ async function handleSelectFolder() {
                     {builtinPresets.map(p => (
                       <PresetCard key={p.id} preset={p} isActive={p.id===activePresetId}
                                   lang={lang} t={t}
-                                  onApply={()=>{}} onEdit={()=>{}} onDelete={()=>{}}/>
+                                  onApply={handleApplyPreset} onEdit={()=>{}} onDelete={()=>{}}/>
                     ))}
                   </div>
 
@@ -1830,7 +1843,7 @@ async function handleSelectFolder() {
                     {(cfg.customPresets || []).map(p => (
                       <PresetCard key={p.id} preset={p} isActive={p.id===activePresetId}
                                   lang={lang} t={t}
-                                  onApply={()=>{}} onEdit={()=>{}} onDelete={()=>{}}/>
+                                  onApply={handleApplyPreset} onEdit={()=>{}} onDelete={()=>{}}/>
                     ))}
                     {(!cfg.customPresets || cfg.customPresets.length===0) && (
                       <div style={{color:"var(--muted)",fontSize:11,fontStyle:"italic",padding:"12px 0"}}>

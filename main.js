@@ -329,6 +329,24 @@ ipcMain.handle("apply-preset", (_, presetId) => {
   return { ok: true };
 });
 
+ipcMain.handle("save-preset-from-config", (_, { name, icon, description }) => {
+  const trimmedName = (name || "").trim();
+  if (!trimmedName) return { ok: false, reason: "name_required" };
+  const fields = Object.fromEntries(PRESET_FIELDS.map(k => [k, config[k]]));
+  const newPreset = {
+    id: generateCustomId(),
+    name: trimmedName,
+    icon: icon || "⭐",
+    description: description || "",
+    builtin: false,
+    fields,
+  };
+  config.customPresets = [...(config.customPresets || []), newPreset];
+  saveConfig(config);
+  emitConfigLoaded();
+  return { ok: true, preset: newPreset };
+});
+
 // ============================================================
 //  JOB POOL
 // ============================================================

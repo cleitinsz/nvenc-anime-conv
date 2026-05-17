@@ -85,4 +85,8 @@ const BUILTIN_PRESETS = [
               jobs: 2, sufixo: "_mobile" } },
 ];
 
-module.exports = { PRESET_FIELDS, BUILTIN_PRESETS };
+function applyPreset(preset, currentConfig) {
+  return { ...currentConfig, ...preset.fields };
+}
+
+module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset };

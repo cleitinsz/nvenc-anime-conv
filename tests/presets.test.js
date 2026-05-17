@@ -37,3 +37,38 @@ describe("BUILTIN_PRESETS", () => {
     }
   });
 });
+
+const { applyPreset } = require("../src/utils/presets");
+
+describe("applyPreset", () => {
+  const preset = BUILTIN_PRESETS[0];  // anime-1080p
+  const baseConfig = {
+    profile: "liveaction", encoder: "cpu", outputRes: "720p",
+    cqHD: 22, cqSD: 20, preset: "p4", cpuPreset: "slow",
+    jobs: 1, sufixo: "_old",
+    outputFolder: "/tmp/foo", lang: "en", lastFolder: "/tmp/bar",
+    deletarOriginal: true, gpu: 1,
+  };
+
+  test("aplica os 9 campos do preset no config", () => {
+    const result = applyPreset(preset, baseConfig);
+    for (const f of PRESET_FIELDS) {
+      expect(result[f]).toBe(preset.fields[f]);
+    }
+  });
+
+  test("preserva campos NÃO cobertos pelo preset", () => {
+    const result = applyPreset(preset, baseConfig);
+    expect(result.outputFolder).toBe("/tmp/foo");
+    expect(result.lang).toBe("en");
+    expect(result.lastFolder).toBe("/tmp/bar");
+    expect(result.deletarOriginal).toBe(true);
+    expect(result.gpu).toBe(1);
+  });
+
+  test("não muta o config de entrada", () => {
+    const snapshot = JSON.parse(JSON.stringify(baseConfig));
+    applyPreset(preset, baseConfig);
+    expect(baseConfig).toEqual(snapshot);
+  });
+});

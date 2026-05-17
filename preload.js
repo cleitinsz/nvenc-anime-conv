@@ -27,4 +27,8 @@ contextBridge.exposeInMainWorld("api", {
 
   generatePreview: (fullPath, timestampPct, config) =>
     ipcRenderer.invoke("preview-generate", { fullPath, timestampPct, config }),
+
+  applyPreset:          (presetId)                 => ipcRenderer.invoke("apply-preset", presetId),
+  savePresetFromConfig: (name, icon, description)  => ipcRenderer.invoke("save-preset-from-config", { name, icon, description }),
+  deletePreset:         (presetId)                 => ipcRenderer.invoke("delete-preset", presetId),
 });

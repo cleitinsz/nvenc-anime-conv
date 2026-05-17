@@ -572,11 +572,15 @@ function pollProgress() {
 
 function sendStats(globalEta = "") {
   mainWindow?.webContents.send("stats", {
-    done: doneCount, errors: errorCount,
-    active: Object.keys(slots).length,
-    queue: queue.length,
+    done:    doneCount,
+    errors:  errorCount,
+    active:  Object.keys(slots).length,
+    queue:   queue.length,
     ganhoGB: ((statsAntes - statsDepois) / 1073741824).toFixed(2),
     globalEta,
+    quarantine: quarantineCount,
+    noGain:     noGainCount,
+    retries:    retryCount,
   });
 }
 

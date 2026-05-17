@@ -591,6 +591,8 @@ ipcMain.on("start-conversion", (_, files) => {
   totalJobs = doneCount = errorCount = 0;
   ignoredCount = files.filter(f => f.status !== "queue").length;
   statsAntes = statsDepois = 0;
+  quarantineCount = noGainCount = retryCount = 0;
+  quarantineFirstPath = null;
   log("INFO", L.starting(queue.length, config.jobs, config.gpu, config.preset));
   fillSlots();
   pollInterval = setInterval(pollProgress, 800);
@@ -606,6 +608,8 @@ ipcMain.on("retry-errors", (_, errorFiles) => {
   if (!running) {
     running = true; sessionStart = Date.now();
     doneCount = errorCount = statsAntes = statsDepois = 0;
+    quarantineCount = noGainCount = retryCount = 0;
+    quarantineFirstPath = null;
     queue = errorFiles.map(f => ({ ...f, status: "queue" }));
     fillSlots();
     pollInterval = setInterval(pollProgress, 800);

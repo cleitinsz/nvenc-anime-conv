@@ -117,6 +117,8 @@ const TRANSLATIONS = {
     statusError: "ERRO",
     statusDoneSkip: "JÁ OK",
     statusHevcSkip: "HEVC",
+    statusQuarantine: "QUARENT.",
+    statusNoGain:     "SEM GANHO",
 
     statTotal: "TOTAL",
     statConverted: "CONVERTIDOS",
@@ -258,6 +260,8 @@ const TRANSLATIONS = {
     statusError: "ERROR",
     statusDoneSkip: "OK",
     statusHevcSkip: "HEVC",
+    statusQuarantine: "QUARANTINE",
+    statusNoGain:     "NO GAIN",
 
     statTotal: "TOTAL",
     statConverted: "CONVERTED",
@@ -614,6 +618,8 @@ function Badge({status}) {
     error:     {color:"var(--accent2)",label:t("statusError"),    icon:"✕"},
     done_skip: {color:"var(--muted)",  label:t("statusDoneSkip"), icon:"–"},
     hevc_skip: {color:"var(--muted)",  label:t("statusHevcSkip"), icon:"–"},
+    quarantine:{color:"#ff8800",        label:t("statusQuarantine"), icon:"⚠"},
+    no_gain:   {color:"var(--muted)",   label:t("statusNoGain"),     icon:"="},
   };
   const m = STATUS_META[status]||STATUS_META.queue;
   return (

@@ -61,4 +61,29 @@ describe("postProcess", () => {
     });
     expect(probeMock).not.toHaveBeenCalled();
   });
+
+  test("verdict 'quarantine' quando duração diverge > 2s da source", async () => {
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 400_000_000 } });
+    const badProbe = jest.fn(async () => ({
+      codec: "hevc", height: 1080, duracao: 1190, bitrate: 2500000,  // -10s vs source
+    }));
+    const result = await postProcess({
+      item: baseItem, exitCode: 0, stderr: "",
+      probe: badProbe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("quarantine");
+    expect(result.reason).toBe("duration_mismatch");
+    expect(result.suppressDelete).toBe(true);
+    expect(result.quarantinePath).toBeDefined();
+  });
+
+  test("aceita output quando item.duracao===0 e probe.duracao > 0 (fallback)", async () => {
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 400_000_000 } });
+    const item = { ...baseItem, duracao: 0 };
+    const result = await postProcess({
+      item, exitCode: 0, stderr: "",
+      probe: okProbe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("ok");
+  });
 });

@@ -1469,6 +1469,62 @@ function EmptyState({onSelect}) {
   );
 }
 
+function PresetCard({ preset, isActive, lang, onApply, onEdit, onDelete, t }) {
+  const name = typeof preset.name === "string" ? preset.name
+             : (preset.name?.[lang] || preset.name?.ptBR || preset.name?.en || "?");
+  const desc = typeof preset.description === "string" ? preset.description
+             : (preset.description?.[lang] || preset.description?.ptBR || preset.description?.en || "");
+  const f = preset.fields;
+  const encoderTag = f.encoder === "cpu"
+    ? `CPU ${f.cpuPreset} • CRF ${f.cqHD}`
+    : `NVENC ${f.preset} • CQ ${f.cqHD}`;
+  const resTag = f.outputRes !== "original" ? ` + ${f.outputRes}` : "";
+
+  const borderColor = isActive ? "var(--accent)" : (preset.builtin ? "var(--border2)" : "var(--accent2)33");
+  const shadow      = isActive ? "0 0 8px var(--accent)33" : "none";
+
+  return (
+    <div style={{border:`1px solid ${borderColor}`,boxShadow:shadow,
+                 borderRadius:8,padding:"10px 12px",background:"var(--panel2)",
+                 display:"flex",flexDirection:"column",gap:6,fontSize:11}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontWeight:700,color:"var(--text)"}}>{preset.icon} {name}</span>
+        {isActive && (
+          <span style={{fontSize:9,fontWeight:800,color:"var(--accent)",letterSpacing:1}}>
+            {t("presetActive")}
+          </span>
+        )}
+      </div>
+      <div style={{fontSize:10,color:"var(--muted)"}}>{encoderTag}{resTag}</div>
+      <div style={{fontSize:10,color:"var(--muted)",
+                   overflow:"hidden",textOverflow:"ellipsis",
+                   display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{desc}</div>
+      <div style={{display:"flex",gap:5,marginTop:4}}>
+        <button className="btn" onClick={()=>onApply(preset)}
+                style={{padding:"5px 10px",fontSize:10,fontWeight:700,
+                        background:"var(--accent)22",color:"var(--accent)",
+                        border:"1px solid var(--accent)55",borderRadius:5}}>
+          {t("btnApplyPreset")}
+        </button>
+        {!preset.builtin && (
+          <>
+            <button className="btn" onClick={()=>onEdit(preset)}
+                    style={{padding:"5px 8px",fontSize:10,background:"transparent",
+                            color:"var(--muted)",border:"1px solid var(--border2)",borderRadius:5}}>
+              {t("btnEditPreset")}
+            </button>
+            <button className="btn" onClick={()=>onDelete(preset)}
+                    style={{padding:"5px 8px",fontSize:10,background:"transparent",
+                            color:"var(--accent2)",border:"1px solid var(--accent2)44",borderRadius:5}}>
+              {t("btnDeletePreset")}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── App principal ────────────────────────────────────────────
 
 function LangRoot() {
@@ -1731,7 +1787,7 @@ async function handleSelectFolder() {
 
               {/* Tabs */}
               <div style={{borderBottom:"1px solid var(--border)",display:"flex",padding:"0 14px"}}>
-                {[["files", t("tabFiles")], ["log", t("tabLog")]].map(([id,lbl])=>(
+                {[["files", t("tabFiles")], ["log", t("tabLog")], ["presets", t("tabPresets")]].map(([id,lbl])=>(
                   <button key={id} className="btn" onClick={()=>setTab(id)} style={{
                     padding:"8px 13px",fontSize:11,background:"transparent",border:"none",
                     fontWeight:tab===id?700:400,
@@ -1743,9 +1799,47 @@ async function handleSelectFolder() {
                 ))}
               </div>
 
-              {tab==="files"
-                ? <FileList files={files} filter={filter} setFilter={setFilter}/>
-                : <LogViewer logs={logs}/>}
+              {tab==="files" && <FileList files={files} filter={filter} setFilter={setFilter}/>}
+              {tab==="log"   && <LogViewer logs={logs}/>}
+              {tab==="presets" && (
+                <div style={{padding:"12px 14px",overflowY:"auto",height:"100%"}}>
+                  <div style={{fontSize:10,fontWeight:800,letterSpacing:1,color:"var(--muted)",marginBottom:8}}>
+                    {t("presetsBuiltIn")}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))",gap:8,marginBottom:18}}>
+                    {builtinPresets.map(p => (
+                      <PresetCard key={p.id} preset={p} isActive={p.id===activePresetId}
+                                  lang={lang} t={t}
+                                  onApply={()=>{}} onEdit={()=>{}} onDelete={()=>{}}/>
+                    ))}
+                  </div>
+
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{fontSize:10,fontWeight:800,letterSpacing:1,color:"var(--muted)"}}>
+                      {t("presetsCustom")}
+                    </div>
+                    <button className="btn"
+                            style={{padding:"5px 10px",fontSize:10,fontWeight:700,
+                                    background:"var(--accent)22",color:"var(--accent)",
+                                    border:"1px solid var(--accent)55",borderRadius:5}}
+                            onClick={()=>{}}>
+                      {t("btnSaveAsPreset")}
+                    </button>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(220px, 1fr))",gap:8}}>
+                    {(cfg.customPresets || []).map(p => (
+                      <PresetCard key={p.id} preset={p} isActive={p.id===activePresetId}
+                                  lang={lang} t={t}
+                                  onApply={()=>{}} onEdit={()=>{}} onDelete={()=>{}}/>
+                    ))}
+                    {(!cfg.customPresets || cfg.customPresets.length===0) && (
+                      <div style={{color:"var(--muted)",fontSize:11,fontStyle:"italic",padding:"12px 0"}}>
+                        — {t("presetCustom")} —
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

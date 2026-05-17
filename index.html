@@ -903,6 +903,7 @@ function SettingsPanel({cfg,onChange,onSelectFolder,onSelectOutputFolder,onStart
             ["original", t("resOriginalLabel"), t("resOriginalDesc")],
             ["1080p",    t("res1080Label"),     t("res1080Desc")],
             ["720p",     t("res720Label"),      t("res720Desc")],
+            ["480p",     t("res480Label"),      t("res480Desc")],
           ].map(([res,label,desc])=>optionBtn((cfg.outputRes||"original")===res, ()=>set("outputRes",res), label, desc))}
           {(cfg.outputRes||"original")!=="original" && (
             <div style={{fontSize:9,color:"var(--yellow)",lineHeight:1.6,

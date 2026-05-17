@@ -93,4 +93,12 @@ function isPresetActive(preset, currentConfig) {
   return PRESET_FIELDS.every(f => preset.fields[f] === currentConfig[f]);
 }
 
-module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset, isPresetActive };
+function findActivePreset(currentConfig, allPresets) {
+  const sorted = [...allPresets].sort((a, b) => (b.builtin ? 1 : 0) - (a.builtin ? 1 : 0));
+  for (const p of sorted) {
+    if (isPresetActive(p, currentConfig)) return p;
+  }
+  return null;
+}
+
+module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset, isPresetActive, findActivePreset };

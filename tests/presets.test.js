@@ -88,3 +88,29 @@ describe("isPresetActive", () => {
     expect(isPresetActive(preset, config)).toBe(false);
   });
 });
+
+const { findActivePreset } = require("../src/utils/presets");
+
+describe("findActivePreset", () => {
+  test("acha o built-in correto quando config bate", () => {
+    const preset = BUILTIN_PRESETS[0];
+    const config = { ...preset.fields, lang: "ptBR" };
+    expect(findActivePreset(config, BUILTIN_PRESETS)).toBe(preset);
+  });
+
+  test("retorna null quando nenhum bate", () => {
+    const config = { profile: "anime", encoder: "nvenc", outputRes: "original",
+                     cqHD: 99, cqSD: 99, preset: "p6", cpuPreset: "medium",
+                     jobs: 2, sufixo: "_xx" };
+    expect(findActivePreset(config, BUILTIN_PRESETS)).toBeNull();
+  });
+
+  test("prefere built-in sobre custom quando ambos batem", () => {
+    const preset = BUILTIN_PRESETS[0];
+    const custom = { id: "custom:dup", builtin: false, name: "Dup",
+                     icon: "⭐", description: "", fields: { ...preset.fields } };
+    const config = { ...preset.fields };
+    const all = [...BUILTIN_PRESETS, custom];
+    expect(findActivePreset(config, all)).toBe(preset);
+  });
+});

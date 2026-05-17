@@ -86,4 +86,26 @@ describe("postProcess", () => {
     });
     expect(result.verdict).toBe("ok");
   });
+
+  test("'quarantine' com reason 'no_video_stream' quando probe.height = 0", async () => {
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 400_000_000 } });
+    const probe = jest.fn(async () => ({ codec: "", height: 0, duracao: 1200, bitrate: 0 }));
+    const result = await postProcess({
+      item: baseItem, exitCode: 0, stderr: "",
+      probe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("quarantine");
+    expect(result.reason).toBe("no_video_stream");
+  });
+
+  test("'quarantine' com reason 'zero_bitrate' quando probe.bitrate = 0", async () => {
+    const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 400_000_000 } });
+    const probe = jest.fn(async () => ({ codec: "hevc", height: 1080, duracao: 1200, bitrate: 0 }));
+    const result = await postProcess({
+      item: baseItem, exitCode: 0, stderr: "",
+      probe, fs, path: mockPath,
+    });
+    expect(result.verdict).toBe("quarantine");
+    expect(result.reason).toBe("zero_bitrate");
+  });
 });

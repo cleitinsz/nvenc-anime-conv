@@ -31,11 +31,16 @@ async function postProcess({ item, exitCode, stderr, probe, fs, path }) {
 
     const probeResult = await probe(item.saida);
 
-    // duração: se item.duracao === 0, basta probe.duracao > 0; senão, diff <= 2s
+    if (!(probeResult.height > 0)) {
+      return quarantine(item, "no_video_stream", fs, path);
+    }
+    if (!(probeResult.bitrate > 0)) {
+      return quarantine(item, "zero_bitrate", fs, path);
+    }
+
     const durOk = item.duracao === 0
       ? probeResult.duracao > 0
       : Math.abs(probeResult.duracao - item.duracao) <= 2.0;
-
     if (!durOk) {
       return quarantine(item, "duration_mismatch", fs, path);
     }

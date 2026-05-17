@@ -29,7 +29,9 @@ const baseItem = {
 };
 
 describe("postProcess", () => {
-  test("verdict 'ok' quando exit 0, output menor, probe casa duração", async () => {
+  beforeEach(() => okProbe.mockClear());
+
+  test("verdict 'ok' quando exit 0", async () => {
     const fs = makeMockFs({ "/src/encoded/anime_hevc.mkv": { size: 400_000_000 } });
     const result = await postProcess({
       item: baseItem, exitCode: 0, stderr: "",

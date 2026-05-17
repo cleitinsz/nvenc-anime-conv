@@ -120,6 +120,14 @@ const TRANSLATIONS = {
     statusQuarantine: "QUARENT.",
     statusNoGain:     "SEM GANHO",
 
+    statQuarantine:    "Quarentena",
+    statQuarantineSub: "saídas inválidas",
+    statNoGain:        "Sem ganho",
+    statNoGainSub:     "output ≥ original",
+    statRetries:       "Retries auto.",
+    statRetriesSub:    "transitórios",
+    btnOpenQuarantine: "📁 ABRIR _QUARANTINE",
+
     statTotal: "TOTAL",
     statConverted: "CONVERTIDOS",
     statEncoding: "EM ENCODE",
@@ -262,6 +270,14 @@ const TRANSLATIONS = {
     statusHevcSkip: "HEVC",
     statusQuarantine: "QUARANTINE",
     statusNoGain:     "NO GAIN",
+
+    statQuarantine:    "Quarantine",
+    statQuarantineSub: "invalid outputs",
+    statNoGain:        "No gain",
+    statNoGainSub:     "output ≥ source",
+    statRetries:       "Auto-retries",
+    statRetriesSub:    "transient errors",
+    btnOpenQuarantine: "📁 OPEN _QUARANTINE",
 
     statTotal: "TOTAL",
     statConverted: "CONVERTED",
@@ -1393,7 +1409,12 @@ function App() {
   const [files,     setFiles]    = useState([]);
   const [slots,     setSlots]    = useState({});
   const [logs,      setLogs]     = useState([]);
-  const [stats,     setStats]    = useState({done:0,errors:0,active:0,queue:0,ganhoGB:"0.00",globalEta:""});
+  const [stats,     setStats]    = useState({
+    done:0, errors:0, active:0, queue:0,
+    ganhoGB:"0.00", globalEta:"",
+    quarantine:0, noGain:0, retries:0,
+  });
+  const [quarantineFirstPath, setQuarantineFirstPath] = useState(null);
   const [running,   setRunning]  = useState(false);
   const [scanning,  setScanning] = useState(false);
   const [scanProg,  setScanProg] = useState(null);
@@ -1454,6 +1475,7 @@ function App() {
     });
     window.api.on("conversion-done",(d)=>{
       setRunning(false);
+      setQuarantineFirstPath(d.quarantineFirstPath || null);
       addLog({t:new Date().toLocaleTimeString(t("locale"),{hour12:false}),lvl:"OK",
         msg: t("logSessionDone")(d.convertidos, d.erros, d.ganhoGB)});
       addToast(t("toastSession")(d.convertidos, d.ganhoGB), "🏁", "var(--accent)");
@@ -1472,7 +1494,8 @@ async function handleSelectFolder() {
     const p = await window.api.selectFolder();
     if (!p) return;
     setFolder(p); setFiles([]); setLogs([]);
-    setStats({done:0,errors:0,active:0,queue:0,ganhoGB:"0.00",globalEta:""});
+    setStats({done:0,errors:0,active:0,queue:0,ganhoGB:"0.00",globalEta:"",
+              quarantine:0,noGain:0,retries:0});
     setSlots({}); setScanProg(null); setScanning(true);
     addLog({t:now(),lvl:"INFO",msg: t("logFolder")(p)});
     addLog({t:now(),lvl:"INFO",msg: t("logScanning")});
@@ -1582,6 +1605,26 @@ async function handleSelectFolder() {
                 <StatCard label={t("statEncoding")}  value={stats.active}          sub={t("statSlots")} color="var(--accent)"/>
                 <StatCard label={t("statErrors")}    value={stats.errors}          sub={t("statFiles")} color={stats.errors>0?"var(--accent2)":"var(--muted)"}/>
                 <StatCard label={t("statSaved")}     value={`${stats.ganhoGB} GB`} sub={t("statFreed")} color="var(--yellow)"/>
+                {stats.quarantine > 0 && (
+                  <StatCard label={t("statQuarantine")} value={stats.quarantine}
+                            sub={t("statQuarantineSub")} color="#ff8800"/>
+                )}
+                {stats.noGain > 0 && (
+                  <StatCard label={t("statNoGain")} value={stats.noGain}
+                            sub={t("statNoGainSub")} color="var(--muted)"/>
+                )}
+                {stats.retries > 0 && (
+                  <StatCard label={t("statRetries")} value={stats.retries}
+                            sub={t("statRetriesSub")} color="var(--yellow)"/>
+                )}
+                {quarantineFirstPath && !running && (
+                  <button className="btn" onClick={() => window.api.openQuarantineFolder(quarantineFirstPath)}
+                          style={{padding:"8px 12px",fontSize:10,fontWeight:700,
+                                  background:"#ff880022",color:"#ff8800",
+                                  border:"1px solid #ff880055",borderRadius:6,letterSpacing:1}}>
+                    {t("btnOpenQuarantine")}
+                  </button>
+                )}
               </div>
 
               <ActiveSlots slots={slots} totalConversoes={totalConversoes}/>

@@ -640,6 +640,7 @@ ipcMain.on("stop-conversion", () => {
 });
 
 ipcMain.on("open-log-folder", () => shell.openPath(app.getPath("userData")));
+ipcMain.on("open-quarantine-folder", (_, p) => { if (p) shell.openPath(p); });
 
 // ============================================================
 //  PREVIEW GENERATION — visual comparison before/after

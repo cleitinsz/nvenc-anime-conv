@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("api", {
   stopConversion:  ()        => ipcRenderer.send("stop-conversion"),
   retryErrors:     (files)   => ipcRenderer.send("retry-errors", files),
   openLogFolder:   ()        => ipcRenderer.send("open-log-folder"),
+  openQuarantineFolder: (path) => ipcRenderer.send("open-quarantine-folder", path),
 
   on: (channel, cb) => {
     const allowed = [

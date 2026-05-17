@@ -1687,8 +1687,11 @@ function App() {
   const [editPresetModal, setEditPresetModal] = useState(null);
 
   // Quebra o ciclo config-loaded → setCfg → useEffect → setConfig → emitConfigLoaded → ...
-  // Quando server manda config-loaded, marca essa flag pra próximo useEffect[cfg] skipar o echo back.
+  // Quando server manda config-loaded, marca essa flag pra próximo useEffect skipar o echo back.
   const skipNextSetConfig = useRef(false);
+  // Bloqueia o envio inicial de setConfig antes do server hidratar o renderer com
+  // o config do disco — evita sobrescrever lang/customPresets/etc com defaults do React.
+  const hydrated = useRef(false);
 
   const totalConversoes = files.filter(f=>!["done_skip","hevc_skip"].includes(f.status)).length;
   const totalQueue      = files.filter(f=>f.status==="queue").length;
@@ -1722,6 +1725,7 @@ function App() {
   useEffect(()=>{
     window.api.on("config-loaded", (payload) => {
       const { _builtinPresets, _activePresetId, ...c } = payload;
+      hydrated.current = true;
       skipNextSetConfig.current = true;
       setCfg(prev => ({...prev, ...c}));
       setBuiltinPresets(_builtinPresets || []);
@@ -1758,14 +1762,17 @@ function App() {
     };
   },[addLog,updateFile]);
 
+  // Sincroniza cfg+lang com o main. Único useEffect (em vez de 2 separados)
+  // pra evitar race condition entre eles. Hydration gate evita sobrescrever
+  // config do disco no primeiro render. skip-ref evita o ciclo de echo.
   useEffect(() => {
+    if (!hydrated.current) return;
     if (skipNextSetConfig.current) {
       skipNextSetConfig.current = false;
       return;
     }
-    window.api.setConfig(cfg);
-  }, [cfg]);
-  useEffect(()=>{ window.api.setConfig({...cfg, lang}); },[lang]);
+    window.api.setConfig({...cfg, lang});
+  }, [cfg, lang]);
 
 function handleOpenSaveModal() {
     const PRESET_FIELDS_RENDERER = ["profile","encoder","outputRes","cqHD","cqSD","preset","cpuPreset","jobs","sufixo"];

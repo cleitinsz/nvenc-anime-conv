@@ -125,7 +125,7 @@ function ffprobeAll(filePath) {
     const proc = cp.spawn("ffprobe", [
       "-v", "error",
       "-select_streams", "v:0",
-      "-show_entries", "stream=codec_name,height:format=duration",
+      "-show_entries", "stream=codec_name,height:format=duration,bit_rate",
       "-of", "json",
       filePath,
     ], { stdio: ["ignore", "pipe", "pipe"] });
@@ -139,9 +139,10 @@ function ffprobeAll(filePath) {
           codec:   j.streams?.[0]?.codec_name || "",
           height:  parseInt(j.streams?.[0]?.height) || 720,
           duracao: parseFloat(j.format?.duration) || 0,
+          bitrate: parseInt(j.format?.bit_rate)   || 0,
         });
       } catch {
-        resolve({ codec: "", height: 720, duracao: 0 });
+        resolve({ codec: "", height: 720, duracao: 0, bitrate: 0 });
       }
     });
   });

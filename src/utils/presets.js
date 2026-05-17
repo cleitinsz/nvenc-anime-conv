@@ -101,4 +101,10 @@ function findActivePreset(currentConfig, allPresets) {
   return null;
 }
 
-module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset, isPresetActive, findActivePreset };
+function generateCustomId() {
+  const hex = () => Math.floor(Math.random() * 16).toString(16);
+  const block = (len) => Array.from({ length: len }, hex).join("");
+  return `custom:${block(8)}-${block(4)}-4${block(3)}-${block(4)}-${block(12)}`;
+}
+
+module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset, isPresetActive, findActivePreset, generateCustomId };

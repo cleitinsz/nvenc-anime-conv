@@ -114,3 +114,16 @@ describe("findActivePreset", () => {
     expect(findActivePreset(config, all)).toBe(preset);
   });
 });
+
+const { generateCustomId } = require("../src/utils/presets");
+
+describe("generateCustomId", () => {
+  test("gera IDs únicos em 100 chamadas", () => {
+    const ids = Array.from({ length: 100 }, () => generateCustomId());
+    expect(new Set(ids).size).toBe(100);
+  });
+
+  test("sempre prefixa 'custom:'", () => {
+    expect(generateCustomId()).toMatch(/^custom:/);
+  });
+});

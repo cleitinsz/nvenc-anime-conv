@@ -354,7 +354,11 @@ function startSlot(slotId, item) {
   slots[slotId] = { proc, item, getStderr: () => stderr, progressFile, inicio: Date.now(), slotId, id: ++totalJobs };
 
   mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "converting", slotId, progress: 0 });
-  proc.on("close", code => { if (running || code === 0) finishSlot(slotId, code); });
+  proc.on("close", code => {
+    if (running || code === 0) {
+      finishSlot(slotId, code).catch(err => log("ERRO", `finishSlot crashed: ${err.message}`));
+    }
+  });
 }
 
 async function finishSlot(slotId, code) {
@@ -381,7 +385,7 @@ async function finishSlot(slotId, code) {
     case "no_gain":    handleNoGain(slotId, slot); break;
     case "quarantine": handleQuarantine(slotId, slot, result); break;
     case "retry":      handleRetry(slotId, slot, result); break;
-    case "error":      handleError(slotId, slot, result); break;
+    case "error":      handleError(slotId, slot, result, code); break;
   }
 
   delete slots[slotId];
@@ -441,7 +445,7 @@ function handleRetry(slotId, slot, result) {
   queue.unshift(item);
 }
 
-function handleError(slotId, slot, result) {
+function handleError(slotId, slot, result, code) {
   const { item } = slot;
   const stderr = slot.getStderr();
   const stderrLines = stderr.split("\n").map(l => l.trim()).filter(Boolean);
@@ -451,7 +455,7 @@ function handleError(slotId, slot, result) {
   const lastError = errorLines.pop() || stderrLines.slice(-2).join(" | ") || "sem mensagem";
 
   errorCount++;
-  log("ERRO", L.slotFailed(slotId, item.name, "n/a"));
+  log("ERRO", L.slotFailed(slotId, item.name, code));
   log("ERRO", L.slotCause(`${result.reason} | ${lastError}`));
   for (const l of errorLines) log("DEBUG", `  > ${l}`);
   mainWindow?.webContents.send("file-status", { fullPath: item.fullPath, status: "error" });

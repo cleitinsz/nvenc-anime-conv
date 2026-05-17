@@ -119,6 +119,8 @@ const TRANSLATIONS = {
     statusHevcSkip: "HEVC",
     statusQuarantine: "QUARENT.",
     statusNoGain:     "SEM GANHO",
+    quarantineTooltip: "Output movido para _quarantine — verifique manualmente",
+    noGainTooltip:     "Output não ficou menor que o original",
 
     statQuarantine:    "Quarentena",
     statQuarantineSub: "saídas inválidas",
@@ -270,6 +272,8 @@ const TRANSLATIONS = {
     statusHevcSkip: "HEVC",
     statusQuarantine: "QUARANTINE",
     statusNoGain:     "NO GAIN",
+    quarantineTooltip: "Output moved to _quarantine — please check manually",
+    noGainTooltip:     "Output is not smaller than the source",
 
     statQuarantine:    "Quarantine",
     statQuarantineSub: "invalid outputs",
@@ -634,12 +638,12 @@ function Badge({status}) {
     error:     {color:"var(--accent2)",label:t("statusError"),    icon:"✕"},
     done_skip: {color:"var(--muted)",  label:t("statusDoneSkip"), icon:"–"},
     hevc_skip: {color:"var(--muted)",  label:t("statusHevcSkip"), icon:"–"},
-    quarantine:{color:"#ff8800",        label:t("statusQuarantine"), icon:"⚠"},
-    no_gain:   {color:"var(--muted)",   label:t("statusNoGain"),     icon:"="},
+    quarantine:{color:"#ff8800",        label:t("statusQuarantine"), icon:"⚠", tooltip:t("quarantineTooltip")},
+    no_gain:   {color:"var(--muted)",   label:t("statusNoGain"),     icon:"=", tooltip:t("noGainTooltip")},
   };
   const m = STATUS_META[status]||STATUS_META.queue;
   return (
-    <span style={{
+    <span title={m.tooltip} style={{
       fontSize:9,fontWeight:800,letterSpacing:1,color:m.color,
       background:`${m.color}14`,border:`1px solid ${m.color}33`,
       borderRadius:4,padding:"2px 7px",

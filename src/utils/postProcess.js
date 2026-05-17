@@ -14,8 +14,8 @@
 
 const TRANSIENT_PATTERNS = [
   /cannot allocate memory/i,
+  /CUDA.*out of memory/i,     // mais específico — testar antes
   /out of memory/i,
-  /CUDA.*out of memory/i,
   /OpenEncodeSessionEx failed/i,          // driver hang típico NVENC
   /No NVENC capable devices found/i,      // race com GPU inicializando
   /Device or resource busy/i,

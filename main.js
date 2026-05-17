@@ -368,34 +368,40 @@ async function finishSlot(slotId, code) {
   const slot = slots[slotId];
   if (!slot) return;
 
-  const { item } = slot;
-  try { fs.unlinkSync(slot.progressFile); } catch {}
-  mainWindow?.webContents.send("slot-clear", { slotId });
+  try {
+    const { item } = slot;
+    try { fs.unlinkSync(slot.progressFile); } catch {}
+    mainWindow?.webContents.send("slot-clear", { slotId });
 
-  const result = await postProcess({
-    item,
-    exitCode: code,
-    stderr:   slot.getStderr(),
-    probe:    ffprobeAll,
-    fs,
-    path,
-  });
+    const result = await postProcess({
+      item,
+      exitCode: code,
+      stderr:   slot.getStderr(),
+      probe:    ffprobeAll,
+      fs,
+      path,
+    });
 
-  const durConv = ((Date.now() - slot.inicio) / 60000).toFixed(1);
+    const durConv = ((Date.now() - slot.inicio) / 60000).toFixed(1);
 
-  switch (result.verdict) {
-    case "ok":         handleOk(slotId, slot, durConv); break;
-    case "no_gain":    handleNoGain(slotId, slot); break;
-    case "quarantine": handleQuarantine(slotId, slot, result); break;
-    case "retry":      handleRetry(slotId, slot, result); break;
-    case "error":      handleError(slotId, slot, result, code); break;
+    switch (result.verdict) {
+      case "ok":         handleOk(slotId, slot, durConv); break;
+      case "no_gain":    handleNoGain(slotId, slot); break;
+      case "quarantine": handleQuarantine(slotId, slot, result); break;
+      case "retry":      handleRetry(slotId, slot, result); break;
+      case "error":      handleError(slotId, slot, result, code); break;
+    }
+  } catch (err) {
+    // Defensa contra exceções não previstas: contabiliza como erro, libera o slot
+    errorCount++;
+    log("ERRO", `[Slot ${slotId}] CRASH em finishSlot: ${err.message}`);
+    mainWindow?.webContents.send("file-status", { fullPath: slot.item.fullPath, status: "error" });
+  } finally {
+    delete slots[slotId];
+    sendStats();
+    fillSlots();
+    if (queue.length === 0 && Object.keys(slots).length === 0) finishSession();
   }
-
-  delete slots[slotId];
-  sendStats();
-  fillSlots();
-
-  if (queue.length === 0 && Object.keys(slots).length === 0) finishSession();
 }
 
 function handleOk(slotId, slot, durConv) {
@@ -640,7 +646,7 @@ ipcMain.on("stop-conversion", () => {
 });
 
 ipcMain.on("open-log-folder", () => shell.openPath(app.getPath("userData")));
-ipcMain.on("open-quarantine-folder", (_, p) => { if (p) shell.openPath(p); });
+ipcMain.on("open-quarantine-folder", (_, p) => { if (p) shell.showItemInFolder(p); });
 
 // ============================================================
 //  PREVIEW GENERATION — visual comparison before/after

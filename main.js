@@ -471,7 +471,14 @@ function finishSession() {
 
   log("OK", L.sessionDone(doneCount, errorCount, ganhoGB, totalMin));
   mainWindow?.webContents.send("conversion-done", {
-    convertidos: doneCount, erros: errorCount, ignorados: ignoredCount, ganhoGB: parseFloat(ganhoGB),
+    convertidos: doneCount,
+    erros:       errorCount,
+    ignorados:   ignoredCount,
+    ganhoGB:     parseFloat(ganhoGB),
+    quarantinados:       quarantineCount,
+    semGanho:            noGainCount,
+    retries:             retryCount,
+    quarantineFirstPath: quarantineFirstPath,
   });
 
   // [FEAT] Notificação nativa Windows

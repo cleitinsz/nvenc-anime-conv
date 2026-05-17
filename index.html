@@ -122,13 +122,14 @@ const TRANSLATIONS = {
     quarantineTooltip: "Output movido para _quarantine — verifique manualmente",
     noGainTooltip:     "Output não ficou menor que o original",
 
-    statQuarantine:    "Quarentena",
+    statQuarantine:    "QUARENTENA",
     statQuarantineSub: "saídas inválidas",
-    statNoGain:        "Sem ganho",
+    statQuarantineSubOpen: "📁 abrir pasta",
+    statNoGain:        "SEM GANHO",
     statNoGainSub:     "output ≥ original",
-    statRetries:       "Retries auto.",
+    statRetries:       "RETRIES AUTO.",
     statRetriesSub:    "transitórios",
-    btnOpenQuarantine: "📁 ABRIR _QUARANTINE",
+    quarantineCardTitle: "Clique para abrir _quarantine no Explorer",
 
     statTotal: "TOTAL",
     statConverted: "CONVERTIDOS",
@@ -305,13 +306,14 @@ const TRANSLATIONS = {
     quarantineTooltip: "Output moved to _quarantine — please check manually",
     noGainTooltip:     "Output is not smaller than the source",
 
-    statQuarantine:    "Quarantine",
+    statQuarantine:    "QUARANTINE",
     statQuarantineSub: "invalid outputs",
-    statNoGain:        "No gain",
+    statQuarantineSubOpen: "📁 open folder",
+    statNoGain:        "NO GAIN",
     statNoGainSub:     "output ≥ source",
-    statRetries:       "Auto-retries",
+    statRetries:       "AUTO-RETRIES",
     statRetriesSub:    "transient errors",
-    btnOpenQuarantine: "📁 OPEN _QUARANTINE",
+    quarantineCardTitle: "Click to open _quarantine in Explorer",
 
     statTotal: "TOTAL",
     statConverted: "CONVERTED",
@@ -715,10 +717,15 @@ function Badge({status}) {
   );
 }
 
-function StatCard({label,value,sub,color="var(--text)"}) {
+function StatCard({label,value,sub,color="var(--text)",onClick,title}) {
+  const clickable = !!onClick;
   return (
-    <div style={{background:"var(--panel)",border:"1px solid var(--border)",
-      borderRadius:8,padding:"10px 14px",flex:1,minWidth:80}}>
+    <div onClick={onClick} title={title}
+      onMouseEnter={clickable?(e)=>e.currentTarget.style.borderColor=color:undefined}
+      onMouseLeave={clickable?(e)=>e.currentTarget.style.borderColor="var(--border)":undefined}
+      style={{background:"var(--panel)",border:"1px solid var(--border)",
+      borderRadius:8,padding:"10px 14px",flex:1,minWidth:80,
+      cursor:clickable?"pointer":"default",transition:"border-color .15s"}}>
       <div style={{fontSize:9,color:"var(--muted)",letterSpacing:2,fontWeight:700,marginBottom:5}}>{label}</div>
       <div style={{fontSize:20,fontWeight:800,color,lineHeight:1,transition:"color .3s"}}>{value}</div>
       {sub&&<div style={{fontSize:9,color:"var(--muted)",marginTop:4}}>{sub}</div>}
@@ -1956,7 +1963,10 @@ function handleOpenSaveModal() {
                 <StatCard label={t("statSaved")}     value={`${stats.ganhoGB} GB`} sub={t("statFreed")} color="var(--yellow)"/>
                 {stats.quarantine > 0 && (
                   <StatCard label={t("statQuarantine")} value={stats.quarantine}
-                            sub={t("statQuarantineSub")} color="#ff8800"/>
+                            sub={quarantineFirstPath && !running ? t("statQuarantineSubOpen") : t("statQuarantineSub")}
+                            color="#ff8800"
+                            title={quarantineFirstPath && !running ? t("quarantineCardTitle") : undefined}
+                            onClick={quarantineFirstPath && !running ? () => window.api.openQuarantineFolder(quarantineFirstPath) : undefined}/>
                 )}
                 {stats.noGain > 0 && (
                   <StatCard label={t("statNoGain")} value={stats.noGain}
@@ -1965,14 +1975,6 @@ function handleOpenSaveModal() {
                 {stats.retries > 0 && (
                   <StatCard label={t("statRetries")} value={stats.retries}
                             sub={t("statRetriesSub")} color="var(--yellow)"/>
-                )}
-                {quarantineFirstPath && !running && (
-                  <button className="btn" onClick={() => window.api.openQuarantineFolder(quarantineFirstPath)}
-                          style={{padding:"8px 12px",fontSize:10,fontWeight:700,
-                                  background:"#ff880022",color:"#ff8800",
-                                  border:"1px solid #ff880055",borderRadius:6,letterSpacing:1}}>
-                    {t("btnOpenQuarantine")}
-                  </button>
                 )}
               </div>
 

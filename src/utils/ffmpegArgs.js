@@ -20,6 +20,7 @@ const PROFILE_ENCODE = {
 const SCALE_FILTER = {
   "1080p": "scale=-2:1080:flags=lanczos",
   "720p":  "scale=-2:720:flags=lanczos",
+  "480p":  "scale=-2:480:flags=lanczos",
 };
 
 /**

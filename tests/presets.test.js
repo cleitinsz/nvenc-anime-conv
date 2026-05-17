@@ -72,3 +72,19 @@ describe("applyPreset", () => {
     expect(baseConfig).toEqual(snapshot);
   });
 });
+
+const { isPresetActive } = require("../src/utils/presets");
+
+describe("isPresetActive", () => {
+  const preset = BUILTIN_PRESETS[0];
+
+  test("retorna true quando todos os 9 campos batem", () => {
+    const config = { ...preset.fields, lang: "ptBR", outputFolder: "/tmp" };
+    expect(isPresetActive(preset, config)).toBe(true);
+  });
+
+  test("retorna false quando 1 campo diverge", () => {
+    const config = { ...preset.fields, cqHD: 30 };
+    expect(isPresetActive(preset, config)).toBe(false);
+  });
+});

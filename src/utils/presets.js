@@ -89,4 +89,8 @@ function applyPreset(preset, currentConfig) {
   return { ...currentConfig, ...preset.fields };
 }
 
-module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset };
+function isPresetActive(preset, currentConfig) {
+  return PRESET_FIELDS.every(f => preset.fields[f] === currentConfig[f]);
+}
+
+module.exports = { PRESET_FIELDS, BUILTIN_PRESETS, applyPreset, isPresetActive };

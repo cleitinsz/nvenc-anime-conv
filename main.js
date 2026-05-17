@@ -21,6 +21,7 @@ const cp   = require("child_process");
 const { fmtBitrate, runParallel }   = require("./src/utils/formatters");
 const { parseProgressFile }         = require("./src/utils/progressParser");
 const { buildArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/utils/ffmpegArgs");
+const { postProcess }               = require("./src/utils/postProcess");
 
 // ============================================================
 //  CONFIG PERSISTIDA  [FEAT]
@@ -40,6 +41,9 @@ const LOG_STRINGS = {
     starting:    (n, jobs, gpu, preset) => `Iniciando | ${n} arquivos | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
     retrying:    (n)              => `Retentando ${n} arquivo(s) com erro...`,
     stopped:     ()               => "Conversão interrompida pelo usuário.",
+    slotQuarantine: (id, name, reason) => `[Slot ${id}] QUARENTENA: ${name} | razão: ${reason}`,
+    slotNoGain:     (id, name, mbOrig) => `[Slot ${id}] SEM GANHO: ${name} (${mbOrig}MB → sem redução)`,
+    slotRetry:      (id, name, reason) => `[Slot ${id}] Erro transitório (${reason}). Re-enfileirando...`,
   },
   en: {
     slotStart:   (id, name, h, enc) => `[Slot ${id}] Starting: ${name} | ${h}p ${enc}`,
@@ -52,6 +56,9 @@ const LOG_STRINGS = {
     starting:    (n, jobs, gpu, preset) => `Starting | ${n} files | ${jobs} jobs | GPU ${gpu} | Preset ${preset}`,
     retrying:    (n)              => `Retrying ${n} file(s) with errors...`,
     stopped:     ()               => "Conversion stopped by user.",
+    slotQuarantine: (id, name, reason) => `[Slot ${id}] QUARANTINE: ${name} | reason: ${reason}`,
+    slotNoGain:     (id, name, mbOrig) => `[Slot ${id}] NO GAIN: ${name} (${mbOrig}MB → no reduction)`,
+    slotRetry:      (id, name, reason) => `[Slot ${id}] Transient error (${reason}). Re-queueing...`,
   },
 };
 
@@ -305,6 +312,10 @@ let totalJobs    = 0;
 let doneCount    = 0;
 let errorCount   = 0;
 let ignoredCount = 0;
+let quarantineCount = 0;
+let noGainCount     = 0;
+let retryCount      = 0;
+let quarantineFirstPath = null;
 let statsAntes   = 0;
 let statsDepois  = 0;
 let pollInterval = null;

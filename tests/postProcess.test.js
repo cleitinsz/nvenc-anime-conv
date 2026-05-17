@@ -167,4 +167,26 @@ describe("postProcess", () => {
     expect(result.verdict).toBe("error");
     expect(result.reason).toBe("unknown:Some random thing happened");
   });
+
+  describe("TRANSIENT_PATTERNS", () => {
+    const cases = [
+      ["cannot allocate memory",        "Cannot allocate memory"],
+      ["out of memory",                 "Encoder out of memory"],
+      ["CUDA out of memory",            "CUDA error: out of memory in nvenc"],
+      ["OpenEncodeSessionEx failed",    "[hevc_nvenc] OpenEncodeSessionEx failed: ..."],
+      ["No NVENC capable devices",     "No NVENC capable devices found"],
+      ["Device or resource busy",       "Device or resource busy"],
+      ["Operation not permitted nvenc", "Operation not permitted: nvenc init"],
+    ];
+
+    test.each(cases)("classifica '%s' como transient (com retry)", async (_label, stderr) => {
+      const fs = makeMockFs();
+      const result = await postProcess({
+        item: { ...baseItem, attempts: 0 },
+        exitCode: 1, stderr,
+        probe: okProbe, fs, path: mockPath,
+      });
+      expect(result.verdict).toBe("retry");
+    });
+  });
 });

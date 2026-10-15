@@ -6,7 +6,7 @@
 //  [PERF] Lê fps/speed/bitrate do progress file em tempo real
 //  [UX]   ETA global da sessão inteira
 //  [UX]   fps, speed, bitrate exibidos nos slots ativos
-//  [STAB] Detecta saídas incompletas no scan (< 1 MB)
+//  [STAB] Detecta saídas incompletas no scan (< 1 MB ou duração ≠ fonte)
 //  [STAB] Retry de erros sem reiniciar sessão
 //  [FEAT] Config persistida entre sessões (JSON em userData)
 //  [FEAT] Notificação nativa Windows ao concluir
@@ -22,6 +22,7 @@ const { fmtBitrate, runParallel }   = require("./src/utils/formatters");
 const { parseProgressFile }         = require("./src/utils/progressParser");
 const { buildArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/utils/ffmpegArgs");
 const { postProcess }               = require("./src/utils/postProcess");
+const { removePartialOutput, isOutputComplete, parseOutputDuration } = require("./src/utils/partialOutput");
 const { BUILTIN_PRESETS, PRESET_FIELDS, findActivePreset, applyPreset, generateCustomId } = require("./src/utils/presets");
 
 // ============================================================
@@ -45,6 +46,7 @@ const LOG_STRINGS = {
     slotQuarantine: (id, name, reason) => `[Slot ${id}] QUARENTENA: ${name} | razão: ${reason}`,
     slotNoGain:     (id, name, mbOrig) => `[Slot ${id}] SEM GANHO: ${name} (${mbOrig}MB → sem redução)`,
     slotRetry:      (id, name, reason) => `[Slot ${id}] Erro transitório (${reason}). Re-enfileirando...`,
+    partialDiscarded: (name)           => `Saída incompleta descartada, vai reconverter: ${name}`,
   },
   en: {
     slotStart:   (id, name, h, enc) => `[Slot ${id}] Starting: ${name} | ${h}p ${enc}`,
@@ -60,6 +62,7 @@ const LOG_STRINGS = {
     slotQuarantine: (id, name, reason) => `[Slot ${id}] QUARANTINE: ${name} | reason: ${reason}`,
     slotNoGain:     (id, name, mbOrig) => `[Slot ${id}] NO GAIN: ${name} (${mbOrig}MB → no reduction)`,
     slotRetry:      (id, name, reason) => `[Slot ${id}] Transient error (${reason}). Re-queueing...`,
+    partialDiscarded: (name)           => `Incomplete output discarded, will re-convert: ${name}`,
   },
 };
 
@@ -167,6 +170,28 @@ function ffprobeAll(filePath) {
   });
 }
 
+// Duração de uma saída MKV pela tag DURATION do stream (0 = truncada/ilegível).
+// Ver parseOutputDuration: o format=duration de um MKV truncado mente.
+function ffprobeOutputDuration(filePath) {
+  return new Promise((resolve) => {
+    const proc = cp.spawn("ffprobe", [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream_tags=DURATION",
+      "-of", "json",
+      filePath,
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+
+    let out = "";
+    proc.stdout.on("data", d => out += d);
+    proc.on("error", () => resolve(0));
+    proc.on("close", () => {
+      try { resolve(parseOutputDuration(JSON.parse(out))); }
+      catch { resolve(0); }
+    });
+  });
+}
+
 // ============================================================
 //  SCAN PARALELO  [PERF]  → src/utils/formatters.js (runParallel)
 // ============================================================
@@ -253,9 +278,7 @@ ipcMain.handle("scan-folder", async (_, folderPath) => {
 
   mainWindow?.webContents.send("scan-progress", { scanned: 0, total: raw.length, phase: "disk" });
 
-  // Pré-filtra arquivos que já têm saída completa (sem chamar ffprobe)
-  const toProbe   = [];
-  const preResult = [];
+  const toProbe = [];
 
   for (const f of raw) {
     const saida = resolveSaida(f, folderPath);
@@ -267,29 +290,42 @@ ipcMain.handle("scan-folder", async (_, folderPath) => {
         try { fs.unlinkSync(saida); } catch {}
         toProbe.push({ f, saida });
       } else {
-        preResult.push({ ...f, status: "done_skip", saida });
+        toProbe.push({ f, saida, hasOutput: true });
       }
     } else {
       toProbe.push({ f, saida });
     }
   }
 
-  // Scan paralelo com ffprobe
+  // Scan paralelo com ffprobe. Saída existente também é sondada: se a duração
+  // não bate com a fonte, é encode interrompido (PARAR, crash) e não "já convertido".
   const probeResults = await runParallel(
-    toProbe.map(({ f, saida }) => async () => {
+    toProbe.map(({ f, saida, hasOutput }) => async () => {
       const meta = await ffprobeAll(f.fullPath);
-      return { f, saida, meta };
+      const outputComplete = hasOutput
+        ? isOutputComplete(await ffprobeOutputDuration(saida), meta.duracao)
+        : false;
+      return { f, saida, meta, hasOutput, outputComplete };
     }),
     4,
     (done) => mainWindow?.webContents.send("scan-progress", {
-      scanned: preResult.length + done,
+      scanned: done,
       total:   raw.length,
       phase:   "probe",
     })
   );
 
-  const result = [...preResult];
-  for (const { f, saida, meta } of probeResults) {
+  const result = [];
+  for (const { f, saida, meta, hasOutput, outputComplete } of probeResults) {
+    if (hasOutput) {
+      if (outputComplete) {
+        result.push({ ...f, status: "done_skip", saida });
+        continue;
+      }
+      try { fs.unlinkSync(saida); } catch {}
+      log("AVISO", L.partialDiscarded(path.basename(saida)));
+    }
+
     // Pula HEVC apenas se não há downscale ativo.
     // Com downscale, recomprimir HEVC faz sentido (4K→1080p mesmo já sendo HEVC).
     const isDownscale = config.outputRes !== "original";
@@ -384,6 +420,8 @@ function killAllJobs() {
   for (const slot of Object.values(slots)) {
     try { slot.proc.kill("SIGKILL"); } catch {}
     try { fs.unlinkSync(slot.progressFile); } catch {}
+    // Saída parcial não pode sobrar: no próximo scan ela passaria por "já convertido"
+    removePartialOutput(slot.proc, slot.item.saida, fs).catch(() => {});
   }
   slots = {};
   if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }

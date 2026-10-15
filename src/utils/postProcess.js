@@ -12,6 +12,8 @@
  * @returns {Promise<{verdict, reason, retryable?, suppressDelete?, quarantinePath?}>}
  */
 
+const { DURATION_TOLERANCE_S } = require("./partialOutput");
+
 const TRANSIENT_PATTERNS = [
   /cannot allocate memory/i,
   /CUDA.*out of memory/i,     // mais específico — testar antes
@@ -62,7 +64,7 @@ async function postProcess({ item, exitCode, stderr, probe, fs, path }) {
 
     const durOk = item.duracao === 0
       ? probeResult.duracao > 0
-      : Math.abs(probeResult.duracao - item.duracao) <= 2.0;
+      : Math.abs(probeResult.duracao - item.duracao) <= DURATION_TOLERANCE_S;
     if (!durOk) {
       return quarantine(item, "duration_mismatch", fs, path);
     }

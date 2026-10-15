@@ -23,6 +23,7 @@ const { parseProgressFile }         = require("./src/utils/progressParser");
 const { buildArgs, buildPreviewArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/utils/ffmpegArgs");
 const { postProcess }               = require("./src/utils/postProcess");
 const { removePartialOutput, isOutputComplete, parseOutputDuration } = require("./src/utils/partialOutput");
+const { canReveal }                 = require("./src/utils/revealPath");
 const { BUILTIN_PRESETS, PRESET_FIELDS, findActivePreset, applyPreset, generateCustomId } = require("./src/utils/presets");
 
 // ============================================================
@@ -249,7 +250,11 @@ function resolveSaida(file, rootFolder) {
 //  IPC — scan
 // ============================================================
 
+// Pasta do último scan: limita o que o renderer pode revelar no Explorer
+let scanRoot = null;
+
 ipcMain.handle("scan-folder", async (_, folderPath) => {
+  scanRoot = folderPath;
   const exts   = ["mkv","mp4","avi","mov"];
   const sufixo = config.sufixo;
   const raw    = [];
@@ -736,6 +741,7 @@ ipcMain.on("stop-conversion", () => {
 
 ipcMain.on("open-log-folder", () => shell.openPath(app.getPath("userData")));
 ipcMain.on("open-quarantine-folder", (_, p) => { if (p) shell.showItemInFolder(p); });
+ipcMain.on("reveal-file", (_, p) => { if (canReveal(p, scanRoot, fs, path)) shell.showItemInFolder(p); });
 
 // ============================================================
 //  PREVIEW GENERATION — visual comparison before/after

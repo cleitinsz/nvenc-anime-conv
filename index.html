@@ -1082,7 +1082,7 @@ function FileList({files, filter, setFilter}) {
   function ctxItems(file){
     return [
       {icon:"🔍",label:t("ctxCompare"),action:()=>window.openPreviewModal?.(file)},
-      {icon:"📂",label:t("ctxOpenFolder"),action:()=>window.api?.openPath?.(file.dir)},
+      {icon:"📂",label:t("ctxOpenFolder"),action:()=>window.api.revealFile(file.fullPath)},
       {icon:"📋",label:t("ctxCopyPath"),action:()=>navigator.clipboard.writeText(file.fullPath)},
     ];
   }

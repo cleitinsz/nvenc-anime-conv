@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("api", {
   retryErrors:     (files)   => ipcRenderer.send("retry-errors", files),
   openLogFolder:   ()        => ipcRenderer.send("open-log-folder"),
   openQuarantineFolder: (path) => ipcRenderer.send("open-quarantine-folder", path),
+  revealFile:      (path)    => ipcRenderer.send("reveal-file", path),
 
   on: (channel, cb) => {
     const allowed = [

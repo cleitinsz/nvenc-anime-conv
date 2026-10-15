@@ -51,7 +51,7 @@ function buildArgsGPU(item, config) {
   // -hwaccel cuda só é compatível sem filtros de CPU (scale, hqdn3d, etc.)
   const args = ["-y"];
   if (!vf) args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
-  args.push("-i", item.fullPath, "-map", "0:v:0", "-map", "0:a:0", "-map", "0:s?");
+  args.push("-i", item.fullPath, "-map", "0:v:0", "-map", "0:a:0?", "-map", "0:s?");
 
   if (vf) args.push("-vf", vf);
 
@@ -87,7 +87,7 @@ function buildArgsCPU(item, config) {
   const args = [
     "-y",
     "-i", item.fullPath,
-    "-map", "0:v:0", "-map", "0:a:0", "-map", "0:s?",
+    "-map", "0:v:0", "-map", "0:a:0?", "-map", "0:s?",
   ];
 
   if (vf) args.push("-vf", vf);

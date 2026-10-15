@@ -222,3 +222,28 @@ describe("buildArgs", () => {
     expect(args).not.toContain("hevc_nvenc");
   });
 });
+
+// ──────────────────────────────────────────────
+//  Mapeamento de streams (backlog #01)
+// ──────────────────────────────────────────────
+
+const mapsOf = (args) => args.flatMap((a, i) => (a === "-map" ? [args[i + 1]] : []));
+
+describe.each([
+  ["buildArgsGPU", buildArgsGPU],
+  ["buildArgsCPU", buildArgsCPU],
+])("%s — mapeamento de streams", (_name, build) => {
+  test("áudio é opcional, para não falhar em vídeo sem trilha de áudio", () => {
+    expect(mapsOf(build(makeItem(), baseConfig))).toContain("0:a:0?");
+  });
+
+  test("não exige trilha de áudio obrigatória", () => {
+    expect(mapsOf(build(makeItem(), baseConfig))).not.toContain("0:a:0");
+  });
+
+  test("vídeo continua obrigatório e legendas continuam opcionais", () => {
+    const maps = mapsOf(build(makeItem(), baseConfig));
+    expect(maps).toContain("0:v:0");
+    expect(maps).toContain("0:s?");
+  });
+});

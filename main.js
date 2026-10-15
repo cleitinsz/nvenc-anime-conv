@@ -20,7 +20,7 @@ const cp   = require("child_process");
 
 const { fmtBitrate, runParallel }   = require("./src/utils/formatters");
 const { parseProgressFile }         = require("./src/utils/progressParser");
-const { buildArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/utils/ffmpegArgs");
+const { buildArgs, buildPreviewArgs, PROFILE_ENCODE, SCALE_FILTER, buildVF } = require("./src/utils/ffmpegArgs");
 const { postProcess }               = require("./src/utils/postProcess");
 const { removePartialOutput, isOutputComplete, parseOutputDuration } = require("./src/utils/partialOutput");
 const { BUILTIN_PRESETS, PRESET_FIELDS, findActivePreset, applyPreset, generateCustomId } = require("./src/utils/presets");
@@ -743,7 +743,7 @@ ipcMain.on("open-quarantine-folder", (_, p) => { if (p) shell.showItemInFolder(p
 
 const PREVIEW_TMP = os.tmpdir();
 
-ipcMain.handle("preview-generate", async (event, { fullPath, timestampPct, config }) => {
+ipcMain.handle("preview-generate", async (event, { fullPath, timestampPct, config: previewConfig }) => {
   const id       = Date.now();
   const origPath = path.join(PREVIEW_TMP, `preview_orig_${id}.png`);
   const convPath = path.join(PREVIEW_TMP, `preview_conv_${id}.png`);
@@ -776,43 +776,12 @@ ipcMain.handle("preview-generate", async (event, { fullPath, timestampPct, confi
 
     sendProgress("Gerando excerpt (10s)...", 30);
 
-    const filters = [];
-    if (config.profile === "anime") {
-      filters.push("hqdn3d=1.2:1.2:5:5", "gradfun");
-    }
-    const vfArg = filters.length > 0 ? ["-vf", filters.join(",")] : [];
-
-    const cq = config.encoder === "cpu"
-      ? (config.cqHD || 20)
-      : (config.cqHD || 28);
-
-    const excerptArgs = [
-      "-ss", String(timestampSec),
-      "-i", fullPath,
-      "-t", "10",
-    ];
-
-    if (config.encoder === "cpu") {
-      excerptArgs.push(
-        "-c:v", "libx265",
-        "-preset", config.cpuPreset || "medium",
-        "-crf", String(cq),
-      );
-    } else {
-      const preset = config.preset || "p6";
-      excerptArgs.push(
-        "-c:v", "hevc_nvenc",
-        "-preset", preset,
-        "-rc", "constqp",
-        "-qp", String(cq),
-      );
-    }
-
-    if (vfArg.length > 0) {
-      excerptArgs.push(...vfArg);
-    }
-
-    excerptArgs.push("-an", excerptPath);
+    // Mesmas opções de vídeo do encode real (CQ por resolução, downscale, GPU, 10-bit)
+    const excerptArgs = buildPreviewArgs(
+      { fullPath, height: meta.height },
+      { ...config, ...previewConfig },
+      { startSec: timestampSec, durationSec: 10, out: excerptPath },
+    );
 
     await new Promise((resolve, reject) => {
       const proc = cp.spawn("ffmpeg", excerptArgs, { stdio: ["ignore", "pipe", "pipe"] });

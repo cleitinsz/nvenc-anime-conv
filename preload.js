@@ -18,7 +18,7 @@ contextBridge.exposeInMainWorld("api", {
       "log", "file-status", "slot-update", "slot-clear",
       "stats", "conversion-done", "scan-progress",
       "reset-converting", "config-loaded", "output-folder-changed",
-      "preview-progress", "preview-done", "preview-error",
+      "preview-progress",
     ];
     if (allowed.includes(channel))
       ipcRenderer.on(channel, (_, data) => cb(data));

@@ -1,4 +1,4 @@
-const { buildVF, buildArgsGPU, buildArgsCPU, buildArgs } = require("../src/utils/ffmpegArgs");
+const { buildVF, buildArgsGPU, buildArgsCPU, buildArgs, buildPreviewArgs } = require("../src/utils/ffmpegArgs");
 
 const baseConfig = {
   gpu: 0, preset: "p6", cqHD: 28, cqSD: 26,
@@ -245,5 +245,54 @@ describe.each([
     const maps = mapsOf(build(makeItem(), baseConfig));
     expect(maps).toContain("0:v:0");
     expect(maps).toContain("0:s?");
+  });
+});
+
+// ──────────────────────────────────────────────
+//  buildPreviewArgs (backlog #03: preview fiel ao encode real)
+// ──────────────────────────────────────────────
+
+// Trecho que define a qualidade do vídeo: do -c:v até o valor do -pix_fmt
+const videoOpts = (args) => {
+  const from = args.indexOf("-c:v");
+  const to   = args.indexOf("-pix_fmt") + 1;
+  return args.slice(from, to + 1);
+};
+
+const previewOpts = { startSec: 600, durationSec: 10, out: "/tmp/preview.mkv" };
+
+describe.each([
+  ["GPU", "nvenc", buildArgsGPU],
+  ["CPU", "cpu",   buildArgsCPU],
+])("buildPreviewArgs — %s", (_name, encoder, buildReal) => {
+  const cases = [
+    ["1080p, perfil anime",              makeItem({ height: 1080 }), { encoder }],
+    ["720p usa o CQ de SD",              makeItem({ height: 720 }),  { encoder }],
+    ["downscale para 720p",              makeItem({ height: 1080 }), { encoder, outputRes: "720p" }],
+    ["GPU 1, perfil liveaction",         makeItem({ height: 1080 }), { encoder, gpu: 1, profile: "liveaction" }],
+  ];
+
+  test.each(cases)("opções de vídeo idênticas ao encode real (%s)", (_c, item, over) => {
+    const config = { ...baseConfig, ...over };
+    const vf = (args) => args.includes("-vf") ? args[args.indexOf("-vf") + 1] : null;
+    const preview = buildPreviewArgs(item, config, previewOpts);
+    const real    = buildReal(item, config);
+
+    expect(videoOpts(preview)).toEqual(videoOpts(real));
+    expect(vf(preview)).toBe(vf(real));
+  });
+
+  test("começa no ponto pedido e codifica só a duração do trecho", () => {
+    const args = buildPreviewArgs(makeItem(), { ...baseConfig, encoder }, previewOpts);
+    expect(args.indexOf("-ss")).toBeLessThan(args.indexOf("-i"));
+    expect(args[args.indexOf("-ss") + 1]).toBe("600");
+    expect(args[args.indexOf("-t") + 1]).toBe("10");
+  });
+
+  test("só vídeo, sem arquivo de progresso, saída por último", () => {
+    const args = buildPreviewArgs(makeItem(), { ...baseConfig, encoder }, previewOpts);
+    expect(args).toContain("-an");
+    expect(args).not.toContain("-progress");
+    expect(args[args.length - 1]).toBe("/tmp/preview.mkv");
   });
 });

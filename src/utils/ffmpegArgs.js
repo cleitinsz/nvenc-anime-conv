@@ -37,25 +37,33 @@ function buildVF(profVf, config) {
   return null;
 }
 
+// ── Opções de vídeo ──────────────────────────────────────────
+//  O que define a qualidade do vídeo. Compartilhado entre o encode real e o
+//  preview, para o preview mostrar exatamente o que o encode vai gerar.
+
 /**
- * Monta os argumentos ffmpeg para encode via GPU NVENC.
- * @param {object} item - Arquivo a codificar (fullPath, saida, progressFile, height)
+ * -hwaccel cuda só é compatível sem filtros de CPU (scale, hqdn3d, etc.)
  * @param {object} config
  * @returns {string[]}
  */
-function buildArgsGPU(item, config) {
+function hwaccelArgs(config) {
+  const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
+  return buildVF(prof.vf, config) ? [] : ["-hwaccel", "cuda", "-hwaccel_output_format", "cuda"];
+}
+
+/**
+ * Filtro + codificação do vídeo via GPU NVENC.
+ * @param {object} item - precisa de height (CQ por resolução)
+ * @param {object} config
+ * @returns {string[]}
+ */
+function videoArgsGPU(item, config) {
   const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
   const cq   = item.height >= 1000 ? config.cqHD : config.cqSD;
   const vf   = buildVF(prof.vf, config);
 
-  // -hwaccel cuda só é compatível sem filtros de CPU (scale, hqdn3d, etc.)
-  const args = ["-y"];
-  if (!vf) args.push("-hwaccel", "cuda", "-hwaccel_output_format", "cuda");
-  args.push("-i", item.fullPath, "-map", "0:v:0", "-map", "0:a:0?", "-map", "0:s?");
-
-  if (vf) args.push("-vf", vf);
-
-  args.push(
+  return [
+    ...(vf ? ["-vf", vf] : []),
     "-c:v", "hevc_nvenc",
     "-gpu",    String(config.gpu),
     "-preset", config.preset,
@@ -64,13 +72,47 @@ function buildArgsGPU(item, config) {
     "-spatial-aq", "1", "-aq-strength", prof.aqStrength,
     "-rc-lookahead", "10",
     "-profile:v", "main10", "-pix_fmt", "p010le",
+  ];
+}
+
+/**
+ * Filtro + codificação do vídeo via CPU libx265.
+ * @param {object} item - precisa de height (CRF por resolução)
+ * @param {object} config
+ * @returns {string[]}
+ */
+function videoArgsCPU(item, config) {
+  const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
+  const crf  = item.height >= 1000 ? config.cqHD : config.cqSD;
+  const vf   = buildVF(prof.vf, config);
+
+  return [
+    ...(vf ? ["-vf", vf] : []),
+    "-c:v", "libx265",
+    "-preset",     config.cpuPreset,
+    "-crf",        String(crf),
+    "-x265-params", prof.x265params,
+    "-pix_fmt",    "yuv420p10le",
+  ];
+}
+
+/**
+ * Monta os argumentos ffmpeg para encode via GPU NVENC.
+ * @param {object} item - Arquivo a codificar (fullPath, saida, progressFile, height)
+ * @param {object} config
+ * @returns {string[]}
+ */
+function buildArgsGPU(item, config) {
+  return [
+    "-y",
+    ...hwaccelArgs(config),
+    "-i", item.fullPath, "-map", "0:v:0", "-map", "0:a:0?", "-map", "0:s?",
+    ...videoArgsGPU(item, config),
     "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
     "-vsync", "0",
     "-progress", item.progressFile,
     item.saida,
-  );
-
-  return args;
+  ];
 }
 
 /**
@@ -80,30 +122,34 @@ function buildArgsGPU(item, config) {
  * @returns {string[]}
  */
 function buildArgsCPU(item, config) {
-  const prof = PROFILE_ENCODE[config.profile] ?? PROFILE_ENCODE.anime;
-  const crf  = item.height >= 1000 ? config.cqHD : config.cqSD;
-  const vf   = buildVF(prof.vf, config);
-
-  const args = [
+  return [
     "-y",
     "-i", item.fullPath,
     "-map", "0:v:0", "-map", "0:a:0?", "-map", "0:s?",
-  ];
-
-  if (vf) args.push("-vf", vf);
-
-  args.push(
-    "-c:v", "libx265",
-    "-preset",     config.cpuPreset,
-    "-crf",        String(crf),
-    "-x265-params", prof.x265params,
-    "-pix_fmt",    "yuv420p10le",
+    ...videoArgsCPU(item, config),
     "-c:a", "copy", "-c:s", "copy", "-tag:v", "hvc1", "-ignore_unknown",
     "-progress", item.progressFile,
     item.saida,
-  );
+  ];
+}
 
-  return args;
+/**
+ * Trecho de preview codificado com as mesmas opções de vídeo do encode real.
+ * @param {object} item - fullPath e height
+ * @param {object} config
+ * @param {{startSec: number, durationSec: number, out: string}} opts
+ * @returns {string[]}
+ */
+function buildPreviewArgs(item, config, { startSec, durationSec, out }) {
+  const gpu = config.encoder !== "cpu";
+  return [
+    "-y",
+    ...(gpu ? hwaccelArgs(config) : []),
+    "-ss", String(startSec), "-i", item.fullPath, "-t", String(durationSec),
+    "-map", "0:v:0",
+    ...(gpu ? videoArgsGPU(item, config) : videoArgsCPU(item, config)),
+    "-an", out,
+  ];
 }
 
 /**
@@ -116,4 +162,4 @@ function buildArgs(item, config) {
   return config.encoder === "cpu" ? buildArgsCPU(item, config) : buildArgsGPU(item, config);
 }
 
-module.exports = { buildVF, buildArgsGPU, buildArgsCPU, buildArgs, PROFILE_ENCODE, SCALE_FILTER };
+module.exports = { buildVF, buildArgsGPU, buildArgsCPU, buildArgs, buildPreviewArgs, PROFILE_ENCODE, SCALE_FILTER };

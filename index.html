@@ -463,24 +463,12 @@ function useComparison() {
   const [frames, setFrames]  = useState(null);   // { orig, conv }
   const [error, setError]    = useState(null);
 
+  // O resultado (frames ou erro) vem pelo retorno do invoke em generate();
+  // o main só emite o progresso por evento.
   useEffect(() => {
     function onProgress(p) { setProgress(p); }
-    function onDone(f) {
-      setFrames({ orig: f.frameOrig, conv: f.frameConv });
-      setState("done");
-    }
-    function onErr(e) {
-      setError(e.message || "Erro desconhecido");
-      setState("error");
-    }
     window.api.on("preview-progress", onProgress);
-    window.api.on("preview-done", onDone);
-    window.api.on("preview-error", onErr);
-    return () => {
-      window.api.off("preview-progress");
-      window.api.off("preview-done");
-      window.api.off("preview-error");
-    };
+    return () => window.api.off("preview-progress");
   }, []);
 
   async function generate(fullPath, timestampPct, config) {
@@ -491,7 +479,7 @@ function useComparison() {
     setFrames(null);
     try {
       const result = await window.api.generatePreview(fullPath, timestampPct, config);
-      setFrames({ orig: result.frameConv, conv: result.frameOrig });
+      setFrames({ orig: result.frameOrig, conv: result.frameConv });
       setState("done");
     } catch (err) {
       setError(err.message || "Erro desconhecido");
@@ -1094,7 +1082,7 @@ function FileList({files, filter, setFilter}) {
   function ctxItems(file){
     return [
       {icon:"🔍",label:t("ctxCompare"),action:()=>window.openPreviewModal?.(file)},
-      {icon:"📂",label:t("ctxOpenFolder"),action:()=>window.api?.openPath?.(file.dir)},
+      {icon:"📂",label:t("ctxOpenFolder"),action:()=>window.api.revealFile(file.fullPath)},
       {icon:"📋",label:t("ctxCopyPath"),action:()=>navigator.clipboard.writeText(file.fullPath)},
     ];
   }

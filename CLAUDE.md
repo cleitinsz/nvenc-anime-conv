@@ -37,9 +37,11 @@ A lógica de negócio foi extraída de `main.js` para módulos em `src/utils/` p
 
 | Módulo | Conteúdo |
 |---|---|
-| `src/utils/ffmpegArgs.js` | `buildArgs`, `buildArgsGPU`, `buildArgsCPU`, `buildVF`, `PROFILE_ENCODE`, `SCALE_FILTER` — monta os argumentos CLI do ffmpeg. Recebe `config` como parâmetro explícito. |
+| `src/utils/ffmpegArgs.js` | `buildArgs`, `buildArgsGPU`, `buildArgsCPU`, `buildPreviewArgs`, `buildVF`, `PROFILE_ENCODE`, `SCALE_FILTER` — monta os argumentos CLI do ffmpeg. Recebe `config` como parâmetro explícito. Encode real e preview compartilham as opções de vídeo (`videoArgsGPU`/`videoArgsCPU`), para o preview mostrar o resultado real. |
 | `src/utils/formatters.js` | `fmtBitrate` (formata kbps/Mbps), `runParallel` (pool async com concorrência limitada) |
 | `src/utils/progressParser.js` | `parseProgressFile` — lê o arquivo de progresso do ffmpeg. Aceita `fsModule` como parâmetro opcional para injeção em testes. |
+| `src/utils/partialOutput.js` | `removePartialOutput` (apaga a saída do slot morto no PARAR, depois do `close`, com retry em EBUSY), `isOutputComplete` e `parseOutputDuration` (scan: MKV sem a tag `DURATION` do stream está truncado — o `format=duration` de um MKV truncado repete a duração da fonte). |
+| `src/utils/revealPath.js` | `canReveal` — valida o caminho do "Abrir pasta": arquivo existente dentro da pasta do último scan. |
 
 `main.js` importa esses módulos e passa `config` explicitamente nos call sites. A variável `config` (estado do módulo) permanece em `main.js`.
 
@@ -49,7 +51,7 @@ A lógica de negócio foi extraída de `main.js` para módulos em `src/utils/` p
 Renderer (index.html)
   └─ window.electronAPI.*        ← exposto pelo preload via contextBridge
        ├─ invoke: select-folder, select-output-folder, scan-folder, get-config
-       └─ send:   set-config, start-conversion, stop-conversion, retry-errors, open-log-folder
+       └─ send:   set-config, start-conversion, stop-conversion, retry-errors, open-log-folder, reveal-file
 
 main.js → renderer (eventos push):
   log, file-status, slot-update, slot-clear, stats, conversion-done,
@@ -64,11 +66,11 @@ Um `setInterval` de 800ms (`pollProgress`) lê o arquivo de progresso temporári
 
 **Argumentos GPU (`buildArgsGPU`):**
 - `-hwaccel cuda -hwaccel_output_format cuda` (só quando sem filtros)
-- `-map 0:v:0 -map 0:a:0 -map 0:s?`
+- `-map 0:v:0 -map 0:a:0? -map 0:s?` (áudio e legendas opcionais)
 - `-rc-lookahead 10`, `-vsync 0`
 
 **Argumentos CPU (`buildArgsCPU`):**
-- `-map 0:v:0 -map 0:a:0 -map 0:s?`
+- `-map 0:v:0 -map 0:a:0? -map 0:s?` (áudio e legendas opcionais)
 
 ### Perfis de encode
 

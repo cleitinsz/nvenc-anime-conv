@@ -12,13 +12,14 @@ contextBridge.exposeInMainWorld("api", {
   retryErrors:     (files)   => ipcRenderer.send("retry-errors", files),
   openLogFolder:   ()        => ipcRenderer.send("open-log-folder"),
   openQuarantineFolder: (path) => ipcRenderer.send("open-quarantine-folder", path),
+  revealFile:      (path)    => ipcRenderer.send("reveal-file", path),
 
   on: (channel, cb) => {
     const allowed = [
       "log", "file-status", "slot-update", "slot-clear",
       "stats", "conversion-done", "scan-progress",
       "reset-converting", "config-loaded", "output-folder-changed",
-      "preview-progress", "preview-done", "preview-error",
+      "preview-progress",
     ];
     if (allowed.includes(channel))
       ipcRenderer.on(channel, (_, data) => cb(data));
